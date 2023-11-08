@@ -1,4 +1,5 @@
 # identify the column or row of a given coordinate
+
 fn_get_cell_pos <- 
   
   function(star_obj, dim_id, coord) {
@@ -12,7 +13,11 @@ fn_get_cell_pos <-
   }
 
 
+# *****************
+
+
 # import a spatial subset
+
 fn_import_subset <- 
   
   function(file, xmin, xmax, ymin, ymax) {
