@@ -24,5 +24,7 @@ fn_tile <- function(s, tile_size) {
           
         })
       
-      expand_grid(tb$x, tb$y)
+      expand_grid(tb$x, tb$y) %>%
+        mutate(tile_id = row_number())
+      
     }
