@@ -7,7 +7,7 @@
 fn_tile_land <- function(tiles_tb, land) {
       
       tiles_tb %>% 
-        pmap_dfr(function(start_x, end_x, start_y, end_y, r) {
+        pmap_dfr(function(start_x, end_x, start_y, end_y, tile_id) {
           
           land_tile <- 
             land[,
@@ -19,7 +19,7 @@ fn_tile_land <- function(tiles_tb, land) {
             st_bbox() %>% 
             st_as_sfc() %>% 
             st_sf() %>% 
-            mutate(r = {{r}})
+            mutate(tile_id = {{tile_id}})
           
           pol_tile %>% 
             mutate(cover = if_else(all(is.na(pull(land_tile))), F, T))
