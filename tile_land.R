@@ -7,7 +7,6 @@
 fn_tile_land <- function(tiles_tb, land) {
       
       tiles_tb %>% 
-        mutate(r = row_number()) %>%
         pmap_dfr(function(start_x, end_x, start_y, end_y, r) {
           
           land_tile <- 
