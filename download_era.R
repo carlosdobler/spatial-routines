@@ -52,6 +52,8 @@ for (yr in yrs) {
 }
 
 
+fs::dir_create(str_glue("/mnt/bucket_mine/era/monthly/{var[2]}"))
+
 "/mnt/pers_disk/" %>% 
   fs::dir_ls(regexp = var[2]) %>% 
   walk(\(f) {
