@@ -8,7 +8,8 @@ rt_download_era_monthly <- function(var, yrs, mons, pls = NA, dest_dir) {
   
   # The cdsapi python package needs to be installed, and credentials
   # updated.
-  
+
+  # ARGUMENTS:
   # var = variable name (in CDS)
   # yrs, mons, pls = year(s), month(s), and pressure level(s) to download
   # (if pressure levels is left blank, single level data will be downloaded)
