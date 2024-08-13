@@ -39,7 +39,7 @@ rt_download_era_monthly <- function(var, yrs, mons, pls = NA, dest_dir) {
       # single level
       if (is.na(pls)) {
         
-        file_name <- stringr::str_glue("era5_{stringr::str_replace(var, '_', '-')}_mon_{yr}-{mon}-01.nc")
+        file_name <- stringr::str_glue("era5_{stringr::str_replace_all(var, '_', '-')}_mon_{yr}-{mon}-01.nc")
         
         # while loop to retry if downloading fails
         
