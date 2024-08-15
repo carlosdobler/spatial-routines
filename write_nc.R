@@ -1,6 +1,8 @@
 # Saves a stars object into an netcdf file
 
 write_nc <- function(stars_obj, t_vector, filename){
+
+print("DEPRECATED")
   
   # stars_obj = a stars object with exactly 3 dimensions:
   # lon (x), lat (y), and time, in that order.
