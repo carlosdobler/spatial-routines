@@ -1,5 +1,5 @@
 
-rt_write_nc <- function(stars_obj, daily = T, filename) {
+rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val = NA) {
   
   # Function to save stars objects into netCDFs. It can save 
   # objects with multiple variables. If variables have units, 
@@ -8,8 +8,11 @@ rt_write_nc <- function(stars_obj, daily = T, filename) {
   # ARGUMENTS:
   # * stars_obj = a stars object with either two or three 
   # dimensions: lon (x), lat (y), and time (optional), in that order.
-  # * daily = indicates whether the time dimension is daily 
   # * filename = where should the file be saved?
+  # * daily = indicates whether the time dimension is daily
+  # * gatt_name = global attribute name
+  # * gatt_val = global attribute value (or text)
+ 
   
   
   # *******************************************************
@@ -49,7 +52,7 @@ rt_write_nc <- function(stars_obj, daily = T, filename) {
       time_vector <- 
         PCICt::as.PCICt(dates_formatted, cal = "gregorian")
       
-    # if dates are daily:
+      # if dates are daily:
     } else if(daily) {
       
       # Obtain calendar type
@@ -88,7 +91,7 @@ rt_write_nc <- function(stars_obj, daily = T, filename) {
   n <- names(stars_obj)
   
   if (length(dim(stars_obj)) > 2) {
-  
+    
     u <- purrr::map_chr(seq_along(n), function(x) {
       
       un <- try(units::deparse_unit(dplyr::pull(stars_obj[x,1,1,1])), silent = T)
@@ -102,7 +105,7 @@ rt_write_nc <- function(stars_obj, daily = T, filename) {
                   ~ncdf4::ncvar_def(name = .x,
                                     units = .y,
                                     dim = list(dim_lon, dim_lat, dim_time)))
-  
+    
   } else {
     
     u <- purrr::map_chr(seq_along(n), function(x) {
@@ -126,10 +129,23 @@ rt_write_nc <- function(stars_obj, daily = T, filename) {
                             vars = varis,
                             force_v4 = TRUE)
   
+  
+  # global attribute
+  if (!is.na(gatt_name)) {
+    ncdf4::ncatt_put(ncnew,
+                     varid = 0,
+                     attname = gatt_name,
+                     attval = gatt_val)
+  }
+  
+  
+  
   # write data
   purrr::walk(seq_along(n),
               ~ncdf4::ncvar_put(nc = ncnew, 
                                 varid = varis[[.x]], 
                                 vals = stars_obj |> dplyr::select(all_of(.x)) |> dplyr::pull()))
-
+  
+  ncdf4::nc_close(ncnew)
+  
 }
