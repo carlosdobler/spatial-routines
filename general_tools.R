@@ -1,5 +1,5 @@
 
-rt_write_nc <- function(stars_obj, filename, daily = "yes", gatt_name = NA, gatt_val = NA) {
+rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val = NA) {
   
   # Function to save stars objects into netCDFs. It can save 
   # objects with multiple variables. If variables have units, 
@@ -47,13 +47,13 @@ rt_write_nc <- function(stars_obj, filename, daily = "yes", gatt_name = NA, gatt
       stringr::str_sub(dates, end = 10)
     
     # if dates are not daily:
-    if (daily == "yes") {
+    if (!daily) {
       
       time_vector <- 
         PCICt::as.PCICt(dates_formatted, cal = "gregorian")
       
       # if dates are daily:
-    } else if(daily == "yes") {
+    } else if(daily) {
       
       # Obtain calendar type
       max_feb <-
@@ -75,13 +75,13 @@ rt_write_nc <- function(stars_obj, filename, daily = "yes", gatt_name = NA, gatt
     }
     
     cal <- 
-      dplyr::case_when(attributes(t_vector)$cal == "360" ~ "360_day",
-                       attributes(t_vector)$cal == "365" ~ "365_day",
-                       attributes(t_vector)$cal == "proleptic_gregorian" ~ "gregorian")
+      dplyr::case_when(attributes(time_vector)$cal == "360" ~ "360_day",
+                       attributes(time_vector)$cal == "365" ~ "365_day",
+                       attributes(time_vector)$cal == "proleptic_gregorian" ~ "gregorian")
     
     dim_time <- ncdf4::ncdim_def(name = "time", 
                                  units = "days since 1970-01-01", 
-                                 vals = as.numeric(t_vector)/86400,
+                                 vals = as.numeric(time_vector)/86400,
                                  calendar = cal)
     
   }
