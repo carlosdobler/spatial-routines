@@ -47,13 +47,13 @@ rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val
       stringr::str_sub(dates, end = 10)
     
     # if dates are not daily:
-    if (!daily) {
+    if (daily == F) {
       
       time_vector <- 
         PCICt::as.PCICt(dates_formatted, cal = "gregorian")
       
       # if dates are daily:
-    } else if(daily) {
+    } else if(daily == T) {
       
       # Obtain calendar type
       max_feb <-
