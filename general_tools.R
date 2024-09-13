@@ -1,5 +1,5 @@
 
-rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val = NA) {
+rt_write_nc <- function(stars_obj, filename, daily, gatt_name = NA, gatt_val = NA) {
   
   # Function to save stars objects into netCDFs. It can save 
   # objects with multiple variables. If variables have units, 
