@@ -1,5 +1,5 @@
 
-rt_write_nc <- function(stars_obj, filename, daily, gatt_name = NA, gatt_val = NA) {
+rt_write_nc <- function(stars_obj, filename, daily = "yes", gatt_name = NA, gatt_val = NA) {
   
   # Function to save stars objects into netCDFs. It can save 
   # objects with multiple variables. If variables have units, 
@@ -47,13 +47,13 @@ rt_write_nc <- function(stars_obj, filename, daily, gatt_name = NA, gatt_val = N
       stringr::str_sub(dates, end = 10)
     
     # if dates are not daily:
-    if (daily == F) {
+    if (daily == "yes") {
       
       time_vector <- 
         PCICt::as.PCICt(dates_formatted, cal = "gregorian")
       
       # if dates are daily:
-    } else if(daily == T) {
+    } else if(daily == "yes") {
       
       # Obtain calendar type
       max_feb <-
