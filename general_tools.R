@@ -18,12 +18,12 @@ rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val
   # *******************************************************
   
   # define dimensions
-  dim_lon <- ncdf4::ncdim_def(name = "lon", 
+  dim_lon <- ncdf4::ncdim_def(name = names(stars::st_dimensions(stars_obj)[1]), 
                               units = "degrees_east", 
                               vals = stars_obj |> 
                                 stars::st_get_dimension_values(1))
   
-  dim_lat <- ncdf4::ncdim_def(name = "lat", 
+  dim_lat <- ncdf4::ncdim_def(name = names(stars::st_dimensions(stars_obj)[1]), 
                               units = "degrees_north", 
                               vals = stars_obj |> 
                                 stars::st_get_dimension_values(2))
