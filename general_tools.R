@@ -1,5 +1,5 @@
 
-rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val = NA) {
+rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name = NA, gatt_val = NA) {
   
   # Function to save stars objects into netCDFs. It can save 
   # objects with multiple variables. If variables have units, 
@@ -10,9 +10,11 @@ rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val
   # dimensions: lon (x), lat (y), and time (optional), in that order.
   # * filename = where should the file be saved?
   # * daily = indicates whether the time dimension is daily
+  # * calendar = one of "360_day", "gregorian", or "noleap". If not
+  # provided, it will guess from the stars obj (needs February to work)
   # * gatt_name = global attribute name
   # * gatt_val = global attribute value (or text)
- 
+  
   
   
   # *******************************************************
@@ -55,19 +57,27 @@ rt_write_nc <- function(stars_obj, filename, daily = T, gatt_name = NA, gatt_val
       # if dates are daily:
     } else if(daily) {
       
-      # Obtain calendar type
-      max_feb <-
-        dates_formatted[stringr::str_sub(dates_formatted, 6,7) == "02"] |> # filter feb months
-        stringr::str_sub(9,10) |> # extract days
-        as.numeric() |>
-        max()
-      
-      model_cal <-
-        dplyr::case_when(max_feb == 30 ~ "360_day",
-                         max_feb == 29 ~ "gregorian",
-                         max_feb == 28 ~ "noleap")
-      
-      # print(stringr::str_glue("   Calendar type (daily): {model_cal}"))
+      if(!is.na(calendar)) {
+        
+        model_cal <- calendar
+        
+      } else {
+        
+        # Obtain calendar type
+        max_feb <-
+          dates_formatted[stringr::str_sub(dates_formatted, 6,7) == "02"] |> # filter feb months
+          stringr::str_sub(9,10) |> # extract days
+          as.numeric() |>
+          max()
+        
+        model_cal <-
+          dplyr::case_when(max_feb == 30 ~ "360_day",
+                           max_feb == 29 ~ "gregorian",
+                           max_feb == 28 ~ "noleap")
+        
+        # print(stringr::str_glue("   Calendar type (daily): {model_cal}"))
+        
+      }
       
       time_vector <- 
         PCICt::as.PCICt(dates_formatted, cal = model_cal)
