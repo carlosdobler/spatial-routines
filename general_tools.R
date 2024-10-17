@@ -163,20 +163,44 @@ rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name
 
 # *****
 
-rt_from_coord_to_ind <- 
+
+rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax, ymax) {
+
+  # Function to obtain the position of cells in a grid
+  # given a set of coordinates
   
-  function(stars_obj, dim_id, coord) {
+  coords <- 
+    map2(c(xmin, ymin, xmax, ymax), c(1,2,1,2), \(coord, dim_id){
+      
+      stars_obj %>% 
+        st_get_dimension_values(dim_id) %>% 
+        {. - coord} %>% 
+        abs() %>% 
+        which.min()
+      
+    }) %>% 
+    set_names(c("xmin", "ymin", "xmax", "ymax"))
+  
+  
+  if(coords$ymax > coords$ymin) {
     
-    stars_obj %>% 
-      st_get_dimension_values(dim_id) %>% 
-      {. - coord} %>% 
-      abs() %>% 
-      which.min()
+    r <- 
+      list(x_start = coords$xmin,
+           y_start = coords$ymin,
+           x_count = coords$xmax - coords$xmin + 1,
+           y_count = coords$ymax - coords$ymin + 1)  
+    
+  } else {
+    
+    r <- 
+      list(x_start = coords$xmin,
+           y_start = coords$ymax,
+           x_count = coords$xmax - coords$xmin + 1,
+           y_count = coords$ymin - coords$ymax + 1)
     
   }
-
-
-
-
+  
+  return(r)
+}
 
 
