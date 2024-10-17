@@ -159,3 +159,24 @@ rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name
   ncdf4::nc_close(ncnew)
   
 }
+
+
+# *****
+
+rt_from_coord_to_ind <- 
+  
+  function(stars_obj, dim_id, coord) {
+    
+    stars_obj %>% 
+      st_get_dimension_values(dim_id) %>% 
+      {. - coord} %>% 
+      abs() %>% 
+      which.min()
+    
+  }
+
+
+
+
+
+
