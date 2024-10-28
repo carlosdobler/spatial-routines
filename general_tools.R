@@ -164,43 +164,65 @@ rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name
 # *****
 
 
-rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax, ymax) {
-
+rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
+  
   # Function to obtain the position of cells in a grid
-  # given a set of coordinates
+  # given a set of coordinates. If four coordinates
+  # are provided, then the functions outputs start and
+  # count positions.
   
-  coords <- 
-    map2(c(xmin, ymin, xmax, ymax), c(1,2,1,2), \(coord, dim_id){
-      
-      stars_obj %>% 
-        st_get_dimension_values(dim_id) %>% 
-        {. - coord} %>% 
-        abs() %>% 
-        which.min()
-      
-    }) %>% 
-    set_names(c("xmin", "ymin", "xmax", "ymax"))
-  
-  
-  if(coords$ymax > coords$ymin) {
+  if (is.na(xmax) & is.na(ymax)) {
+    
+    coords <- 
+      map2(c(xmin, ymin), c(1,2), \(coord, dim_id){
+        
+        stars_obj %>% 
+          st_get_dimension_values(dim_id) %>% 
+          {. - coord} %>% 
+          abs() %>% 
+          which.min()
+        
+      }) %>% 
+      set_names(c("x", "y"))
     
     r <- 
-      list(x_start = coords$xmin,
-           y_start = coords$ymin,
-           x_count = coords$xmax - coords$xmin + 1,
-           y_count = coords$ymax - coords$ymin + 1)  
+      list(x = coords$x,
+           y = coords$y)
     
   } else {
     
-    r <- 
-      list(x_start = coords$xmin,
-           y_start = coords$ymax,
-           x_count = coords$xmax - coords$xmin + 1,
-           y_count = coords$ymin - coords$ymax + 1)
+    coords <- 
+      map2(c(xmin, ymin, xmax, ymax), c(1,2,1,2), \(coord, dim_id){
+        
+        stars_obj %>% 
+          st_get_dimension_values(dim_id) %>% 
+          {. - coord} %>% 
+          abs() %>% 
+          which.min()
+        
+      }) %>% 
+      set_names(c("xmin", "ymin", "xmax", "ymax"))
+    
+    
+    if(coords$ymax > coords$ymin) {
+      
+      r <- 
+        list(x_start = coords$xmin,
+             y_start = coords$ymin,
+             x_count = coords$xmax - coords$xmin + 1,
+             y_count = coords$ymax - coords$ymin + 1)  
+      
+    } else {
+      
+      r <- 
+        list(x_start = coords$xmin,
+             y_start = coords$ymax,
+             x_count = coords$xmax - coords$xmin + 1,
+             y_count = coords$ymin - coords$ymax + 1)
+      
+    }
     
   }
   
   return(r)
 }
-
-
