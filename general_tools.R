@@ -29,7 +29,7 @@ rt_gs_download_files <- function(f, dest){
     system(ignore.stdout = T, ignore.stderr = T)
 
   updated <- 
-    stringr::str_glue("{dest}{f}")
+    stringr::str_glue("{dest}{fs::path_file(f)}")
 
   return(updated)
   
