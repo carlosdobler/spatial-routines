@@ -1,3 +1,23 @@
+rt_download_from_gs <- function(f, dest){
+
+  # Function to download files from a google cloud bucket
+  # to a local directory
+
+  # ARGUMENTS:
+  # * f = name of file in the bucket to download
+  # * dest = name of the local destination directory
+  
+  # create directory "dest" if inexistent
+  if (!fs::dir_exists(dest)) fs::dir_create(dest)
+  
+  stringr::str_glue("gsutil cp {f} {dest}") |> 
+    system(ignore.stdout = T, ignore.stderr = T)
+  
+}
+
+
+# *****
+
 
 rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name = NA, gatt_val = NA) {
   
