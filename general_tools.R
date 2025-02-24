@@ -1,7 +1,22 @@
-rt_download_from_gs <- function(f, dest){
+rt_gs_list_files <- function(d){
+
+  # Function to list all files in a given
+  # google cloud bucket directory (d)
+  
+  stringr::str_glue("gsutil ls {d}") |> 
+    system(intern = T)
+  
+}
+
+# *****
+
+
+rt_gs_download_files <- function(f, dest){
 
   # Function to download files from a google cloud bucket
-  # to a local directory
+  # to a local directory. When assigned to an object, that
+  # object will contain the updated file name (with path
+  # reflecting "dest"). 
 
   # ARGUMENTS:
   # * f = name of file in the bucket to download
@@ -12,6 +27,11 @@ rt_download_from_gs <- function(f, dest){
   
   stringr::str_glue("gsutil cp {f} {dest}") |> 
     system(ignore.stdout = T, ignore.stderr = T)
+
+  updated <- 
+    stringr::str_glue("{dest}{f}")
+
+  return(updated)
   
 }
 
