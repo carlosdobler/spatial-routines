@@ -280,3 +280,43 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
   
   return(r)
 }
+
+
+# ***** # TILING FRAMEWORK
+
+
+rt_tile_table <- function(s, tile_size) {
+  
+  # Function to split a stars object (can be a proxy)
+  # into tiles of a given size (tile_size)
+  
+  dims <- 
+    c(1,2) |> 
+    set_names(c("x", "y"))
+  
+  df <- 
+    imap(dims, function(dim_id, dim_name){
+      
+      d <- 
+        dim(s)[dim_id] |> 
+        seq_len()
+      
+      n <- 
+        round(dim(s)[dim_id]/tile_size)
+      
+      split(d, ceiling(d/(length(d)/n))) |> 
+        
+        map_dfr(~tibble(start = first(.x),
+                        end = last(.x)) |> 
+                  mutate(count = end - start + 1)) |> 
+        
+        rename(!!str_glue("start_{dim_name}") := 1,
+               !!str_glue("end_{dim_name}") := 2,
+               !!str_glue("count_{dim_name}") := 3)
+      
+    })
+  
+  expand_grid(df$x, df$y) %>%
+    mutate(tile_id = row_number(), .before = 1)
+  
+}
