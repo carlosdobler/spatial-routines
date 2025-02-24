@@ -29,14 +29,14 @@ rt_gs_download_files <- function(f, dest){
   
   # download files
   
-  pl <- plan()
+  pl <- future::plan()
   
-  if (pl |> as.list() |> stringr::str_flatten() |> stringr::str_detect("SequentialFuture")){
-    print(stringr::str_glue("downloading sequentially...")
+  if (pl |> as.list() |> stringr::str_flatten() |> stringr::str_detect("SequentialFuture") |> suppressWarnings()) {
+    print(stringr::str_glue("downloading sequentially..."))
   } else {
-    print(stringr::str_glue("downloading in parallel...")
+    print(stringr::str_glue("downloading in parallel..."))
   }
-          
+  
   f |> 
     furrr::future_walk(~stringr::str_glue("gsutil cp {.x} {dest}") |> 
                          system(ignore.stdout = T, ignore.stderr = T))
