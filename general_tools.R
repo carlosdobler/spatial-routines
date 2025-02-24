@@ -12,25 +12,30 @@ rt_gs_list_files <- function(d){
 
 
 rt_gs_download_files <- function(f, dest){
-
-  # Function to download files from a google cloud bucket
-  # to a local directory. When assigned to an object, that
-  # object will contain the updated file name (with path
-  # reflecting "dest"). 
-
+  
+  # Function to download one or multiple files from a google 
+  # cloud bucket to a local directory. When assigned to an object, 
+  # that object will contain the updated file name(s) (with path
+  # reflecting "dest"). The function downloads files in parallel 
+  # by default with future. A multicore or multisession plan needs to
+  # be called beforehand; otherwise downloads will be sequential.
+  
   # ARGUMENTS:
-  # * f = name of file in the bucket to download
+  # * f = name of file(s) in the bucket to download
   # * dest = name of the local destination directory
   
   # create directory "dest" if inexistent
   if (!fs::dir_exists(dest)) fs::dir_create(dest)
   
-  stringr::str_glue("gsutil cp {f} {dest}") |> 
-    system(ignore.stdout = T, ignore.stderr = T)
-
+  # download files
+  f |> 
+    furrr::future_walk(~stringr::str_glue("gsutil cp {.x} {dest}") |> 
+                         system(ignore.stdout = T, ignore.stderr = T))
+  
+  # update names
   updated <- 
-    stringr::str_glue("{dest}{fs::path_file(f)}")
-
+    stringr::str_glue("{dest}/{fs::path_file(f)}")
+  
   return(updated)
   
 }
