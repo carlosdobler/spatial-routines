@@ -344,7 +344,7 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
         # if_else(all(is.na(pull(land_tile))), F, T)
         
       })) |> 
-      unnest() |> 
+      unnest(cols = c(land)) |> 
       st_as_sf()
 
   }
