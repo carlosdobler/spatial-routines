@@ -36,10 +36,19 @@ st_dimensions(land_r) <- st_dimensions(s)[1:2]
 
 # V2
 
+# remove antartica:
+centr <- 
+  land_pol |> 
+  st_centroid() |> 
+  st_coordinates() |> 
+  as_tibble()
+
 land_pol <- "/mnt/bucket_mine/misc_data/physical/ne_110m_land/ne_110m_land.shp" |> st_read()
 
 land_r <- 
-  land_pol %>% 
+  land_pol %>%
+  mutate(Y = centr$Y) |> 
+  filter(Y > -60) |> 
   mutate(a = 1) %>% 
   select(a) %>% 
   st_rasterize(st_as_stars(st_bbox(),
