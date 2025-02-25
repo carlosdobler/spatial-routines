@@ -285,10 +285,11 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
 # ***** # TILING FRAMEWORK
 
 
-rt_tile_table <- function(s, tile_size) {
+rt_tile_table <- function(s, tile_size, land = NULL) {
   
   # Function to split a stars object (can be a proxy)
-  # into tiles of a given size (tile_size)
+  # into tiles of a given size (tile_size). If "land" is provided,
+  # an additional column is added
   
   dims <- 
     c(1,2) |> 
@@ -316,7 +317,38 @@ rt_tile_table <- function(s, tile_size) {
       
     })
   
-  expand_grid(df$x, df$y) %>%
+  df <- 
+    expand_grid(df$x, df$y) %>%
     mutate(tile_id = row_number(), .before = 1)
+  
+  
+  if (!is.null(land)) {
+    
+    df <- 
+      mutate(df, land = pmap_dfr(df, function(start_x, end_x, start_y, end_y, ...){
+        
+        land_tile <- 
+          land[,
+               start_x:end_x,
+               start_y:end_y]
+        
+        pol_tile <-
+          land_tile %>%
+          st_bbox() %>%
+          st_as_sfc() %>%
+          st_sf()
+
+        pol_tile %>%
+          mutate(land = if_else(all(is.na(pull(land_tile))), F, T))
+        
+        # if_else(all(is.na(pull(land_tile))), F, T)
+        
+      })) |> 
+      unnest() |> 
+      st_as_sf()
+
+  }
+  
+  return(df)
   
 }
