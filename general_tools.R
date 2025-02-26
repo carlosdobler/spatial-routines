@@ -288,13 +288,28 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
 rt_tile_table <- function(s, tile_size, land = NULL) {
   
   # Function to split a stars object (can be a proxy)
-  # into tiles of a given size (tile_size). If "land" is provided,
-  # an additional column is added
+  # into tiles of a given size. Output is a table specifying 
+  # where each tile starts and ends in terms of cell positions. 
   
+  # If "land" is provided, an additional column is added indicating 
+  # whether a tile covers a portion of land. In this case, the output 
+  # is an sf object (tiles as polygons).
+  
+  # ARGUMENTS:
+  # * s = stars object or proxy
+  # * tile_size = number of cells per side of tile
+  # * land = stars object representing land with any value
+  #   and oceans as NA. This object must have the exact same 
+  #   spatial dimensions as s.
+  
+  
+  # dimensions' indices
   dims <- 
     c(1,2) |> 
     set_names(c("x", "y"))
   
+  
+  # create table of positions, one for each dimension
   df <- 
     imap(dims, function(dim_id, dim_name){
       
@@ -317,11 +332,22 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
       
     })
   
+  # combine both tables
   df <- 
-    expand_grid(df$x, df$y) %>%
-    mutate(tile_id = row_number(), .before = 1)
+    expand_grid(df$x, df$y) 
+  
+  # add index column with appropriate padding
+  length_id <- 
+    df |> 
+    nrow() |> 
+    str_length()
+  
+  df <- 
+    df %>%
+    mutate(tile_id = row_number() |> str_pad(length_id, "left", "0"), .before = 1)
   
   
+  # if land is provided:
   if (!is.null(land)) {
     
     df <- 
@@ -337,16 +363,14 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
           st_bbox() %>%
           st_as_sfc() %>%
           st_sf()
-
+        
         pol_tile %>%
           mutate(land = if_else(all(is.na(pull(land_tile))), F, T))
-        
-        # if_else(all(is.na(pull(land_tile))), F, T)
         
       })) |> 
       unnest(cols = c(land)) |> 
       st_as_sf()
-
+    
   }
   
   return(df)
