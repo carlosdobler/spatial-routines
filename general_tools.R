@@ -25,28 +25,42 @@ rt_gs_download_files <- function(f, dest){
   # * dest = name of the local destination directory
   
   # create directory "dest" if inexistent
-  if (!fs::dir_exists(dest)) fs::dir_create(dest)
-  
-  # download files
-  
-  pl <- future::plan()
-  
-  if (pl |> as.list() |> stringr::str_flatten() |> stringr::str_detect("SequentialFuture") |> suppressWarnings()) {
-    print(stringr::str_glue("downloading sequentially..."))
-  } else {
-    print(stringr::str_glue("downloading in parallel..."))
+  if (!fs::dir_exists(dest)) {
+    fs::dir_create(dest)
   }
   
-  f |> 
-    furrr::future_walk(~stringr::str_glue("gsutil cp {.x} {dest}") |> 
-                         system(ignore.stdout = T, ignore.stderr = T))
   
-  # update names
-  updated <- 
-    stringr::str_glue("{dest}/{fs::path_file(f)}")
-  
-  return(updated)
-  
+  if (any(str_sub(f, end = 2) != "gs")) {
+    
+    print(str_glue("ERROR: file(s) not in cloud"))
+    
+  } else {
+    
+    
+    # download files
+    
+    if (is(plan(), "sequential")) {
+      print(str_glue("downloading sequentially..."))
+    } else {
+      print(str_glue("downloading in parallel..."))
+    }
+    
+    
+    f |> 
+      future_walk(\(f_) {
+        str_glue("gcloud storage cp {f_} {dest}") |> 
+          system(ignore.stdout = T, ignore.stderr = T)
+      })
+    
+    
+    # update names
+    updated <- 
+      str_glue("{dest}/{fs::path_file(f)}")
+    
+    return(updated)
+    
+  }
+    
 }
 
 
