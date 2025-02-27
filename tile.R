@@ -189,7 +189,7 @@ rt_tile_2_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
 # *****
 
 
-rt_tile_3_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, ...) {
+rt_tile_3_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
   
   s <- 
     st_as_stars(dimensions = spatial_dims)
@@ -310,17 +310,6 @@ rt_tile_3_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL,
   
   # fix dimension
   st_dimensions(mos)[2] <- st_dimensions(s)[2]
-  
-  
-  # if arguments to save the file were provided,
-  # write as netcdf
-  args_ <- list(...)
-  
-  if (any(str_detect(names(args_), "filename"))) {
-    
-    rt_write_nc(mos, ...)
-    
-  }
   
   return(mos)
   
