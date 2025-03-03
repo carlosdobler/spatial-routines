@@ -1,6 +1,6 @@
  # TILING FRAMEWORK
 
-rt_tile_1_table <- function(s, tile_size, land = NULL) {
+rt_tile_table <- function(s, tile_size, land = NULL) {
   
   # Function to split a stars object (can be a proxy)
   # into tiles of a given size. Output is a table specifying 
@@ -101,7 +101,7 @@ rt_tile_1_table <- function(s, tile_size, land = NULL) {
 # *****
 
 
-rt_tile_h_load <- function(start_x, start_y, count_x, count_y, list_files, parallel = NULL) {
+rt_tile_load <- function(start_x, start_y, count_x, count_y, list_files, parallel = NULL) {
 
   # Helper function to load a tile of a list of files
 
@@ -144,7 +144,7 @@ rt_tile_h_load <- function(start_x, start_y, count_x, count_y, list_files, paral
 # *****
 
 
-rt_tile_2_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
+rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
   
   # Function that first loads data from list_files, then runs a 
   # function (FUN) on each tile in df_tiles, and then saves the 
@@ -189,7 +189,7 @@ rt_tile_2_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
 # *****
 
 
-rt_tile_3_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
+rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
   
   s <- 
     st_as_stars(dimensions = spatial_dims)
