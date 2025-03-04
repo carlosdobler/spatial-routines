@@ -304,8 +304,8 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
           future_pmap(function(tile_id, ...) {
             
             dir_tiles |>  
-              fs::dir_ls(regexp = str_glue("tile_{tile_id}.rds")) |> 
-              read_rds() |>  
+              fs::dir_ls(regexp = tile_id) |> 
+              read_ncdf() |>  
               suppressMessages()
             
           })
