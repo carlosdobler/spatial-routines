@@ -1,4 +1,4 @@
- # TILING FRAMEWORK
+# TILING FRAMEWORK
 
 rt_tile_table <- function(s, tile_size, land = NULL) {
   
@@ -97,18 +97,17 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
 }
 
 
-
 # *****
 
 
 rt_tile_load <- function(start_x, start_y, count_x, count_y, list_files, parallel = NULL) {
-
+  
   # Helper function to load a tile of a list of files
-
+  
   # NEEDS A WAY TO SPECIFY TIME STEPS TO IMPORT!
   # OR TO ACCOUNT FOR 1 TIME STEP
-
-
+  
+  
   if (!is.null(parallel)) {
     if (parallel) {
       oplan <- plan(multicore)
@@ -118,26 +117,26 @@ rt_tile_load <- function(start_x, start_y, count_x, count_y, list_files, paralle
     
     on.exit(plan(oplan))
   }
-
+  
   s_tile <-
     list_files |>
     future_map(\(f){
-
+      
       read_ncdf(f,
                 ncsub = cbind(start = c(start_x,
                                         start_y,
                                         1),
-
+                              
                               count = c(count_x,
                                         count_y,
                                         NA)))
-
+      
     }) |>
     suppressMessages() |>
     do.call(c, args = _)
-
+  
   return(s_tile)
-
+  
 }
 
 
@@ -149,7 +148,7 @@ rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
   # Function that first loads data from list_files, then runs a 
   # function (FUN) on each tile in df_tiles, and then saves the 
   # output (a processed tile) in dir_tiles.
-
+  
   
   
   
@@ -168,19 +167,19 @@ rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
   
   # loop through tiles
   future_pwalk(df_tiles, function(tile_id, start_x, start_y, count_x, count_y, ...){
-
+    
     # load all data within the tile
     s_tile <-
       rt_tile_h_load(start_x, start_y, count_x, count_y, list_files, parallel_load)
-
+    
     # apply function
     s_tile <-
       FUN(s_tile)
-
+    
     # save tile
     s_tile |>
       write_rds(str_glue("{dir_tiles}/tile_{tile_id}.rds"))
-
+    
   })
   
 }
@@ -189,7 +188,9 @@ rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
 # *****
 
 
-rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
+rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, time_lims = NULL) {
+  
+  # df_tiles, dir_tiles = paste0(dir_tiles, "/tile_1"), spatial_dims = st_dimensions(s_proxy), time_dim = t, time_lims = t_lim
   
   s <- 
     st_as_stars(dimensions = spatial_dims)
@@ -249,33 +250,48 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
               
               return(empty_stars)
               
-            # tile has land:
-            # load from saved file
+              # tile has land:
+              # load from saved file
             } else {
               
-              dir_tiles |>  
-                fs::dir_ls(regexp = tile_id)) |> 
-                read_ncdf() |>  
-                suppressMessages()
+              f_tile <-
+                dir_tiles |>  
+                fs::dir_ls(regexp = tile_id)
+              
+              if (is.null(time_lims)) {
+                
+                f_tile |> 
+                  read_ncdf() |>  
+                  suppressMessages()
+                
+              } else {
+                
+                f_tile |> 
+                  read_ncdf(ncsub = cbind(start = c(1, 1, time_lims[1]),
+                                          count = c(NA,NA, time_lims[2]))) |>  
+                  suppressMessages()
+                
+              }
+              
             }
             
           })
-        
-        # concatenate tiles from one row
-        one_row <- 
-          do.call(c, c(one_row, along = 1))
-        
-        # fix dimension
-        st_dimensions(one_row)[1] <- st_dimensions(s)[1]
-        
-        return(one_row)
-        
+    
+    # concatenate tiles from one row
+    one_row <- 
+      do.call(c, c(one_row, along = 1))
+    
+    # fix dimension
+    st_dimensions(one_row)[1] <- st_dimensions(s)[1]
+    
+    return(one_row)
+    
       })
-    
-    
-    
-  # tiling does not account for land coverage:
-  # load all tiles from saved files
+
+
+
+# tiling does not account for land coverage:
+# load all tiles from saved files
   } else {
     
     
