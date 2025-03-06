@@ -234,7 +234,7 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
             # if tile has no land
             # create an empty stars object of the size of the tile
             if (land == FALSE) {
-            
+              
               
               ss <- s[, start_x:end_x, start_y:end_y]
               
@@ -315,7 +315,6 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
     
   # tiling does not account for land coverage:
   # load all tiles from saved files
-  # TO DO: ACCOMMODATE LIMITED TIME DIM!
   } else {
     
     
@@ -327,10 +326,25 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
           filter(start_y == row_i) |>  
           future_pmap(function(tile_id, ...) {
             
-            dir_tiles |>  
-              fs::dir_ls(regexp = tile_id) |> 
-              read_ncdf() |>  
-              suppressMessages()
+            f_tile <-
+              dir_tiles |>  
+              fs::dir_ls(regexp = str_glue("{tile_id}.nc"))
+            
+            if (is.null(time_dim)) {
+              
+              f_tile |> 
+                read_ncdf() |>  
+                suppressMessages()
+              
+            } else {
+              
+              f_tile |> 
+                read_ncdf(ncsub = cbind(start = c(1, 1, time_lims[1]),
+                                        count = c(NA,NA, time_lims[2] - time_lims[1] + 1))) |>  
+                suppressMessages()
+              
+            }
+            
             
           })
         
