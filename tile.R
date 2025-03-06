@@ -188,9 +188,8 @@ rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
 # *****
 
 
-rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, time_lims = NULL) {
+rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
   
-  # df_tiles, dir_tiles = paste0(dir_tiles, "/tile_1"), spatial_dims = st_dimensions(s_proxy), time_dim = t, time_lims = t_lim
   
   s <- 
     st_as_stars(dimensions = spatial_dims)
@@ -198,6 +197,25 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
   df_tiles <- 
     df_tiles |> 
     st_drop_geometry()
+  
+  
+  if (!is.null(time_dim)) {
+    
+    time_dim_full <-
+      dir_tiles |>
+      fs::dir_ls() |>
+      first() |>
+      read_ncdf(proxy = F) |>
+      suppressMessages() |> 
+      st_get_dimension_values("time")
+    
+    time_lims <-
+      c(which(time_dim_full == first(time_dim)),
+        which(time_dim_full == last(time_dim)))
+    
+  }
+  
+  
   
   
   # if tiling accounts for land coverage
@@ -209,27 +227,29 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
         
         one_row <- 
           df_tiles |>  
-          filter(start_y == row_i) |>  
+          filter(start_y == row_i) |>
           future_pmap(function(tile_id, start_x, end_x, start_y, end_y, land, ...) {
+            
             
             # if tile has no land
             # create an empty stars object of the size of the tile
             if (land == FALSE) {
+            
               
-              s <- s[, start_x:end_x, start_y:end_y]
+              ss <- s[, start_x:end_x, start_y:end_y]
               
               if (is.null(time_dim)) {
                 
                 empty_array <- 
-                  array(NA, dim = c(dim(s)[1], 
-                                    dim(s)[2]))
+                  array(NA, dim = c(dim(ss)[1], 
+                                    dim(ss)[2]))
                 
                 
               } else {
                 
                 empty_array <- 
-                  array(NA, dim = c(dim(s)[1], 
-                                    dim(s)[2],
+                  array(NA, dim = c(dim(ss)[1], 
+                                    dim(ss)[2],
                                     time = length(time_dim)))
                 
               }
@@ -237,8 +257,8 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
               empty_stars <- 
                 st_as_stars(empty_array)
               
-              st_dimensions(empty_stars)[1] <- st_dimensions(s)[1]
-              st_dimensions(empty_stars)[2] <- st_dimensions(s)[2]
+              st_dimensions(empty_stars)[1] <- st_dimensions(ss)[1]
+              st_dimensions(empty_stars)[2] <- st_dimensions(ss)[2]
               
               
               if (!is.null(time_dim)) {
@@ -250,15 +270,18 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
               
               return(empty_stars)
               
-              # tile has land:
-              # load from saved file
+              
+              
+            # tile has land:
+            # load from saved file
             } else {
+              
               
               f_tile <-
                 dir_tiles |>  
-                fs::dir_ls(regexp = tile_id)
+                fs::dir_ls(regexp = str_glue("{tile_id}.nc"))
               
-              if (is.null(time_lims)) {
+              if (is.null(time_dim)) {
                 
                 f_tile |> 
                   read_ncdf() |>  
@@ -268,7 +291,7 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
                 
                 f_tile |> 
                   read_ncdf(ncsub = cbind(start = c(1, 1, time_lims[1]),
-                                          count = c(NA,NA, time_lims[2]))) |>  
+                                          count = c(NA,NA, time_lims[2] - time_lims[1] + 1))) |>  
                   suppressMessages()
                 
               }
@@ -276,22 +299,23 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
             }
             
           })
-    
-    # concatenate tiles from one row
-    one_row <- 
-      do.call(c, c(one_row, along = 1))
-    
-    # fix dimension
-    st_dimensions(one_row)[1] <- st_dimensions(s)[1]
-    
-    return(one_row)
-    
+        
+        # concatenate tiles from one row
+        one_row <- 
+          do.call(c, c(one_row, along = 1))
+        
+        # fix dimension
+        st_dimensions(one_row)[1] <- st_dimensions(s)[1]
+        
+        return(one_row)
+        
       })
-
-
-
-# tiling does not account for land coverage:
-# load all tiles from saved files
+    
+    
+    
+  # tiling does not account for land coverage:
+  # load all tiles from saved files
+  # TO DO: ACCOMMODATE LIMITED TIME DIM!
   } else {
     
     
@@ -330,3 +354,4 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL, t
   return(mos)
   
 }
+
