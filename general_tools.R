@@ -8,6 +8,7 @@ rt_gs_list_files <- function(d){
   
 }
 
+
 # *****
 
 
@@ -230,6 +231,88 @@ rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name
 
 
 # *****
+
+
+rt_write_nc_notime <- function(stars_obj, filename, gatt_name = NA, gatt_val = NA) {
+  
+  # Function to write a NetCDF file that has more than two dimensions 
+  # (longitude and latitude), and none of them represents time.
+  
+  
+  dims <- vector("list", length(dim(stars_obj)))
+  names(dims) <- names(dim(stars_obj))
+  
+  # define dimensions
+  dims[[1]] <- 
+    ncdf4::ncdim_def(name = names(st_dimensions(stars_obj)[1]), 
+                     units = "degrees_east", 
+                     vals = stars_obj |> st_get_dimension_values(1))
+  
+  dims[[2]] <- 
+    ncdf4::ncdim_def(name = names(st_dimensions(stars_obj)[2]), 
+                     units = "degrees_north", 
+                     vals = stars_obj |> st_get_dimension_values(2))
+  
+  
+  
+  extra_dim_names <- names(dim(stars_obj)) |> tail(-2)
+  
+  for (dimen in seq_along(dims) |> tail(-2)) {
+    
+    dims[[dimen]] <- ncdf4::ncdim_def(name = names(st_dimensions(stars_obj)[dimen]), 
+                                      units = "", 
+                                      vals = stars_obj |> st_get_dimension_values(dimen))
+    
+  }
+  
+  
+  var_names <- names(stars_obj)
+  
+  var_units <- map_chr(seq_along(var_names), function(x) {
+    
+    un <- try(units::deparse_unit(pull(stars_obj)), silent = T)
+    if (class(un) == "try-error") un <- ""
+    return(un)
+    
+  })
+  
+  varis <- 
+    map2(var_names, var_units, 
+         ~ncdf4::ncvar_def(name = .x,
+                           units = .y,
+                           dim = dims))
+  
+  
+  
+  # create file
+  ncnew <- 
+    ncdf4::nc_create(filename = filename, 
+                     vars = varis,
+                     force_v4 = TRUE)
+  
+  # global attribute
+  if (!is.na(gatt_name)) {
+    ncdf4::ncatt_put(ncnew,
+                     varid = 0,
+                     attname = gatt_name,
+                     attval = gatt_val)
+  }
+  
+  
+  # write data
+  walk(seq_along(var_names),
+       ~ncdf4::ncvar_put(nc = ncnew, 
+                         varid = varis[[.x]], 
+                         vals = stars_obj |> select(all_of(.x)) |> pull()))
+  
+  
+  ncdf4::nc_close(ncnew)
+  
+}
+
+
+# *****
+
 
 
 rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
