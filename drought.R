@@ -1,3 +1,4 @@
+#' @export
 heat_index_var_generator <- function() {
   
   # download climatological annual heat index file
@@ -57,7 +58,7 @@ heat_index_var_generator <- function() {
 
 # *****
 
-
+#' @export
 wb_calculator_th <- function(d, s_tas, s_pr, heat_vars) {
   
   # ARGUMENTS:
@@ -98,6 +99,7 @@ wb_calculator_th <- function(d, s_tas, s_pr, heat_vars) {
 
 # function to generate an url to download forecast data from IRI
 
+#' @export
 nmme_url_generator <- function(model, date, variable, lead = 5) {
   
   # ARGUMENTS:
@@ -142,6 +144,7 @@ nmme_url_generator <- function(model, date, variable, lead = 5) {
 # four dimensions only (lat, lon, member, lead) and with
 # existing units
 
+#' @export
 nmme_formatter <- function(f, variable, lead = 5) {
   
   # ARGUMENTS:
