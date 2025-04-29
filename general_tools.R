@@ -1,3 +1,4 @@
+#' @export
 rt_gs_list_files <- function(d){
 
   # Function to list all files in a given
@@ -12,6 +13,7 @@ rt_gs_list_files <- function(d){
 # *****
 
 
+#' @export
 rt_gs_download_files <- function(f, dest){
   
   # Function to download one or multiple files from a google 
@@ -68,6 +70,7 @@ rt_gs_download_files <- function(f, dest){
 # *****
 
 
+#' @export
 rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name = NA, gatt_val = NA) {
   
   # Function to save stars objects into netCDFs. It can save 
@@ -233,6 +236,7 @@ rt_write_nc <- function(stars_obj, filename, daily = T, calendar = NA, gatt_name
 # *****
 
 
+#' @export
 rt_write_nc_notime <- function(stars_obj, filename, gatt_name = NA, gatt_val = NA) {
   
   # Function to write a NetCDF file that has more than two dimensions 
@@ -314,7 +318,7 @@ rt_write_nc_notime <- function(stars_obj, filename, gatt_name = NA, gatt_val = N
 # *****
 
 
-
+#' @export
 rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
   
   # Function to obtain the position of cells in a grid
