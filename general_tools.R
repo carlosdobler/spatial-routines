@@ -1,10 +1,17 @@
+box::use(
+  methods[...],
+  stringr[...],
+  furrr[...],
+  fs[...])
+
+
 #' @export
 rt_gs_list_files <- function(d){
 
   # Function to list all files in a given
   # google cloud bucket directory (d)
   
-  stringr::str_glue("gsutil ls {d}") |> 
+  str_glue("gsutil ls {d}") |> 
     system(intern = T)
   
 }
@@ -28,8 +35,8 @@ rt_gs_download_files <- function(f, dest){
   # * dest = name of the local destination directory
   
   # create directory "dest" if inexistent
-  if (!fs::dir_exists(dest)) {
-    fs::dir_create(dest)
+  if (!dir_exists(dest)) {
+    dir_create(dest)
   }
   
   
@@ -58,7 +65,7 @@ rt_gs_download_files <- function(f, dest){
     
     # update names
     updated <- 
-      str_glue("{dest}/{fs::path_file(f)}")
+      str_glue("{dest}/{path_file(f)}")
     
     return(updated)
     
