@@ -13,7 +13,7 @@ rt_gs_list_files <- function(dir){
 
   box::use(stringr[...])
   
-  str_glue("gsutil ls {dir}") |> 
+  str_glue("gcloud storage ls {dir}") |> 
     system(intern = T)
   
 }
@@ -39,7 +39,8 @@ rt_gs_list_files <- function(dir){
 rt_gs_download_files <- function(f, dest){
   
   box::use(stringr[...],
-           furrr[...])
+           furrr[...],
+           future[...])
   
   # create directory "dest" if inexistent
   if (!fs::dir_exists(dest)) {
@@ -72,7 +73,7 @@ rt_gs_download_files <- function(f, dest){
     
     # update names
     updated <- 
-      str_glue("{dest}/{path_file(f)}")
+      str_glue("{dest}/{fs::path_file(f)}")
     
     return(updated)
     
