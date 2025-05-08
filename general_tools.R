@@ -36,7 +36,7 @@ rt_gs_list_files <- function(dir){
 #' @param dest local destination directory
 #' 
 #' @export
-rt_gs_download_files <- function(f, dest){
+rt_gs_download_files <- function(f, dest, quiet = F){
   
   box::use(stringr[...],
            furrr[...],
@@ -54,13 +54,15 @@ rt_gs_download_files <- function(f, dest){
     
   } else {
     
-    
     # download files
-    
-    if (methods::is(plan(), "sequential")) {
-      print(str_glue("downloading sequentially..."))
-    } else {
-      print(str_glue("downloading in parallel..."))
+    if (!quiet) {
+      
+      if (methods::is(plan(), "sequential")) {
+        message(str_glue("   downloading sequentially..."))
+      } else {
+        message(str_glue("   downloading in parallel..."))
+      }
+      
     }
     
     
