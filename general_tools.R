@@ -105,13 +105,12 @@ rt_gs_download_files <- function(f, dest, quiet = F){
 #' @export
 rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt_val = NA) {
   
-  # Function to write a NetCDF file that has more than two dimensions 
-  # (longitude and latitude), and none of them represents time.
-  
-  
-  box::use(stars[...],
+  box::use(r/core[...],
+           stars[...],
            purrr[...],
-           dplyr[...])
+           dplyr[...],
+           PCICt[...],
+           ncdf4[...])
   
   
   # DEFINE DIMENSIONS *************
@@ -122,19 +121,19 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
   # lat and lon
   
   dims[[1]] <- 
-    ncdf4::ncdim_def(name = names(dims)[1], 
+    ncdim_def(name = names(dims)[1], 
                      units = "degrees_east", 
                      vals = stars_obj |> st_get_dimension_values(1))
   
   dims[[2]] <- 
-    ncdf4::ncdim_def(name = names(dims)[2], 
+    ncdim_def(name = names(dims)[2], 
                      units = "degrees_north", 
                      vals = stars_obj |> st_get_dimension_values(2))
   
   
   # rest of dimensions
   
-  for (dim_i in seq_along(dims) |> utils::tail(-2)) {
+  for (dim_i in seq_along(dims) |> tail(-2)) {
     
     dim_vals <- 
       stars_obj |> 
@@ -142,9 +141,9 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
     
     
     # dimension is time
-    if (methods::is(dim_vals, "Date") | 
-        methods::is(dim_vals, "POSIXct") | 
-        methods::is(dim_vals, "PCICt")) {
+    if (is(dim_vals, "Date") | 
+        is(dim_vals, "POSIXct") | 
+        is(dim_vals, "PCICt")) {
       
       
       time_vector_str <- 
@@ -192,14 +191,14 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
         }
         
         time_vector <- 
-          PCICt::as.PCICt(time_vector_str, cal = cal_spec)
+          as.PCICt(time_vector_str, cal = cal_spec)
         
         
       # time dim is not daily
       } else {
         
         time_vector <- 
-          PCICt::as.PCICt(time_vector_str, cal = "gregorian")
+          as.PCICt(time_vector_str, cal = "gregorian")
         
       }
       
@@ -210,7 +209,7 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
                   attributes(time_vector)$cal == "proleptic_gregorian" ~ "gregorian")
       
       dims[[dim_i]] <-
-        ncdf4::ncdim_def(name = names(dims)[dim_i],
+        ncdim_def(name = names(dims)[dim_i],
                          units = "days since 1970-01-01", 
                          vals = as.numeric(time_vector)/86400,
                          calendar = cal)
@@ -219,7 +218,7 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
     } else {
       
       dims[[dim_i]] <- 
-        ncdf4::ncdim_def(name = names(dims)[dim_i], 
+        ncdim_def(name = names(dims)[dim_i], 
                          units = "", 
                          vals = dim_vals)
       
@@ -249,7 +248,7 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
   
   varis <- 
     map2(var_names, var_units, 
-         ~ncdf4::ncvar_def(name = .x,
+         ~ncvar_def(name = .x,
                            units = .y,
                            dim = dims))
   
@@ -258,7 +257,7 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
   # CREATE FILE ***********
   
   ncnew <- 
-    ncdf4::nc_create(filename = filename, 
+    nc_create(filename = filename, 
                      vars = varis,
                      force_v4 = TRUE)
   
@@ -268,7 +267,7 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
   
   if (!is.na(gatt_name)) {
     
-    ncdf4::ncatt_put(ncnew,
+    ncatt_put(ncnew,
                      varid = 0,
                      attname = gatt_name,
                      attval = gatt_val)
@@ -279,11 +278,11 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
   # WRITE DATA ****************
   
   walk(seq_along(var_names),
-       ~ncdf4::ncvar_put(nc = ncnew, 
+       ~ncvar_put(nc = ncnew, 
                          varid = varis[[.x]], 
                          vals = stars_obj |> select(all_of(.x)) |> pull()))
   
-  ncdf4::nc_close(ncnew)
+  nc_close(ncnew)
   
 }
 
