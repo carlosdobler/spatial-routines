@@ -1,6 +1,10 @@
 #' @export
 heat_index_var_generator <- function() {
   
+  box::use(stringr[...],
+           dplyr[...],
+           stars[...])
+  
   # download climatological annual heat index file
   # (generated with `monitor_forecast/annual_heat_index_era.R` script)
   str_glue("gcloud storage cp gs://clim_data_reg_useast1/era5/climatologies/era5_heat-index_yr_1991-2020.nc {tempdir()}") |>  
@@ -29,24 +33,24 @@ heat_index_var_generator <- function() {
   # https://github.com/sbegueria/SPEI/blob/master/R/thornthwaite.R#L128-L140
   
   K_mon <- 
-    map2(seq(15,365, by = 30), # Julian day (mid-point)
-         c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31), # days/month
-         \(J, days_in_mon){
-           
-           s_hi %>% 
-             st_dim_to_attr(2) %>% 
-             mutate(tanLat = tan(latitude/57.2957795),
-                    Delta = 0.4093 * sin(((2 * pi * J) / 365) - 1.405),
-                    tanDelta = tan(Delta),
-                    tanLatDelta = tanLat * tanDelta,
-                    tanLatDelta = ifelse(tanLatDelta < (-1), -1, tanLatDelta),
-                    tanLatDelta = ifelse(tanLatDelta > 1, 1, tanLatDelta),
-                    omega = acos(-tanLatDelta),
-                    N = 24 / pi * omega,
-                    K = N / 12 * days_in_mon / 30) %>% 
-             select(K)
-           
-         })
+    purrr::map2(seq(15,365, by = 30), # Julian day (mid-point)
+                c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31), # days/month
+                \(J, days_in_mon){
+                  
+                  s_hi %>% 
+                    st_dim_to_attr(2) %>% 
+                    mutate(tanLat = tan(latitude/57.2957795),
+                           Delta = 0.4093 * sin(((2 * pi * J) / 365) - 1.405),
+                           tanDelta = tan(Delta),
+                           tanLatDelta = tanLat * tanDelta,
+                           tanLatDelta = ifelse(tanLatDelta < (-1), -1, tanLatDelta),
+                           tanLatDelta = ifelse(tanLatDelta > 1, 1, tanLatDelta),
+                           omega = acos(-tanLatDelta),
+                           N = 24 / pi * omega,
+                           K = N / 12 * days_in_mon / 30) %>% 
+                    select(K)
+                  
+                })
   
   r <- list(s_hi = s_hi, s_alpha = s_alpha, K_mon = K_mon)
   
@@ -68,6 +72,12 @@ wb_calculator_th <- function(d, s_tas, s_pr, heat_vars) {
   # * heat_vars = list obtained with heat_index_generator function
   # * tas_pr = should underlying tas and pr data be provided?
   
+  
+  box::use(dplyr[...],
+           purrr[...],
+           stringr[...],
+           lubridate[...]
+           )
   
   # calculate PET
   s_pet <-
@@ -100,21 +110,25 @@ wb_calculator_th <- function(d, s_tas, s_pr, heat_vars) {
 # function to generate an url to download forecast data from IRI
 
 #' @export
-nmme_url_generator <- function(model, date, variable, lead = 5) {
+nmme_url_generator <- function(model, date, variable, lead = 5, df) {
   
   # ARGUMENTS:
   # - model: model name
   # - date: month to download (only 1)
   # - variable: "tref" or "prec"
   # - lead: number of lead months
+  # - df: data frame with model parameters
   
+  box::use(lubridate[...],
+           dplyr[...],
+           stringr[...])
   
   d <- 
     as_date(date) # format as date if it's not
   
   # subset model row
   src <- 
-    df_sources |>
+    df |>
     filter(model == {{model}})
   
   # part of url 
@@ -152,6 +166,8 @@ nmme_formatter <- function(f, variable, lead = 5) {
   # - variable: "tref" or "prec"
   # - lead: ...
   
+  box::use(dplyr[...],
+           stars[...])
   
   # extract units
   un <- 
@@ -159,7 +175,7 @@ nmme_formatter <- function(f, variable, lead = 5) {
     filter(variable == {{variable}}) |> 
     filter(name == "units") |> 
     pull(value) |> 
-    pluck(1)
+    purrr::pluck(1)
   
   # read ncdf
   s <- 
@@ -167,7 +183,7 @@ nmme_formatter <- function(f, variable, lead = 5) {
     read_mdim() |> 
     suppressMessages() |> 
     suppressWarnings() |> 
-    adrop() |> 
+    abind::adrop() |> 
     st_set_dimensions("L", values = seq(lead+1)) # simplify lead dimension
   
   
