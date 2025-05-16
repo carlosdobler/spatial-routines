@@ -1,6 +1,13 @@
-# TILING FRAMEWORK
 
+#'@export
 rt_tile_table <- function(s, tile_size, land = NULL) {
+
+  box::use(purrr[...],
+           stars[...],
+           dplyr[...],
+           stringr[...],
+           sf[...])
+           
   
   # Function to split a stars object (can be a proxy)
   # into tiles of a given size. Output is a table specifying 
@@ -49,7 +56,7 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
   
   # combine both tables
   df <- 
-    expand_grid(df$x, df$y) 
+    tidyr::expand_grid(df$x, df$y) 
   
   # add index column with appropriate padding
   length_id <- 
@@ -58,7 +65,7 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
     str_length()
   
   df <- 
-    df %>%
+    df |>
     mutate(tile_id = row_number() |> str_pad(length_id, "left", "0"), .before = 1)
   
   
@@ -99,8 +106,14 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
 
 # *****
 
-
+#'@export
 rt_tile_load <- function(start_x, start_y, count_x, count_y, list_files, parallel = NULL) {
+
+  box::use(stars[...],
+           future[...],
+           furrr[...],
+           stars[...])
+           
   
   # Helper function to load a tile of a list of files
   
@@ -142,7 +155,7 @@ rt_tile_load <- function(start_x, start_y, count_x, count_y, list_files, paralle
 
 # *****
 
-
+#'@export
 rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
   
   # Function that first loads data from list_files, then runs a 
@@ -187,9 +200,15 @@ rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
 
 # *****
 
-
+#'@export
 rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
-  
+
+  box::use(stars[...],
+           sf[...],
+           dplyr[...],
+           purrr[...],
+           future[...],
+           furrr[...])
   
   s <- 
     st_as_stars(dimensions = spatial_dims)
