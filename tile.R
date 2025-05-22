@@ -94,7 +94,7 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
           mutate(land = if_else(all(is.na(pull(land_tile))), F, T))
         
       })) |> 
-      unnest(cols = c(land)) |> 
+      tidyr::unnest(cols = c(land)) |> 
       st_as_sf()
     
   }
@@ -208,7 +208,8 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
            dplyr[...],
            purrr[...],
            future[...],
-           furrr[...])
+           furrr[...],
+           stringr[...])
   
   s <- 
     st_as_stars(dimensions = spatial_dims)
@@ -224,7 +225,7 @@ rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
       dir_tiles |>
       fs::dir_ls() |>
       first() |>
-      read_ncdf(proxy = F) |>
+      read_ncdf(proxy = T) |>
       suppressMessages() |> 
       st_get_dimension_values("time")
     
