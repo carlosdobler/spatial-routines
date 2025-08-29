@@ -16,19 +16,19 @@ rt_gs_list_files <- function(dir) {
 #' Download file(s) from a google bucket directory
 #'
 #' @description
-#' Function to download one or multiple files from a google cloud bucket
-#' to a local directory. When assigned to an object, that object will contain
-#' the updated file name(s) (with path reflecting the destination directory).
-#' The function downloads files in parallel by default with mirai. Daemons
-#' need to be called beforehand; otherwise downloads will be sequential. The
-#' "future" engine can also be used to download in parallel, which similarly
-#' requires a plan (e.g. multicore) to be specified beforehand.
+#' Function to download one or multiple files from a google cloud bucket to a local
+#' directory. When assigned to an object, that object will contain the updated file
+#' name(s) (with path reflecting the destination directory). The function downloads
+#' files in parallel by default using either mirai or future, depending on whether
+#' daemons or a plan (e.g. multicore) have been called beforehand. If no daemons or
+#' plan has been specified, downloads will be sequential. The option to force downloads
+#' to be sequential is also available.
 #'
 #' @param f file(s) in the bucket to download (with full path; e.g. gs://...)
 #' @param dest local destination directory
 #' @param quiet (boolean) if FALSE (default), omits printing whether files are being downloaded in parallel
-#' @param parallel "mirai" (default) downloads in parallel with mirai. Also accepts "future" or FALSE
-#' to download sequentially
+#' @param parallel (boolean) TRUE downloads in parallel with mirai (if dameons have already been called) or
+#' with future (if a plan has been specified). FALSE forces sequential downloads.
 #' @param gsutil (boolean) if FALSE (default), downloads with "gcloud storage" instead of "gsutil"
 #'
 #' @export
