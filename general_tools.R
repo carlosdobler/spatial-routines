@@ -54,9 +54,9 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
 
     # check whether gcloud or gsutil utility will be used
     if (gsutil) {
-      cmd <- "gsutil cp {f_} {dest}"
+      cmd <- "gsutil"
     } else {
-      cmd <- "gcloud storage cp {f_} {dest}"
+      cmd <- "gcloud storage"
     }
 
     # download
@@ -67,9 +67,10 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
 
       f |>
         purrr::walk(\(f_) {
-          stringr::str_glue("{cmd}") |>
+          stringr::str_glue("{cmd} cp {f_} {dest}") |>
             system(ignore.stdout = T, ignore.stderr = T)
         })
+      #
     } else if (parallel_ == "m") {
       if (!quiet) {
         message("   downloading in parallel (mirai)...")
@@ -79,7 +80,7 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
         purrr::walk(
           purrr::in_parallel(
             \(f_) {
-              stringr::str_glue("{cmd}") |>
+              stringr::str_glue("{cmd} cp {f_} {dest}") |>
                 system(ignore.stdout = T, ignore.stderr = T)
             },
             cmd = cmd,
@@ -93,7 +94,7 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
 
       f |>
         furrr::future_walk(\(f_) {
-          stringr::str_glue("{cmd}") |>
+          stringr::str_glue("{cmd} cp {f_} {dest}") |>
             system(ignore.stdout = T, ignore.stderr = T)
         })
     }
