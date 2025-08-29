@@ -60,7 +60,7 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
     }
 
     # download
-    if (parallel == "none") {
+    if (parallel_ == "none") {
       if (!quiet) {
         message("   downloading sequentially...")
       }
@@ -70,7 +70,7 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
           stringr::str_glue("{cmd}") |>
             system(ignore.stdout = T, ignore.stderr = T)
         })
-    } else if (parallel == "mirai") {
+    } else if (parallel_ == "m") {
       if (!quiet) {
         message("   downloading in parallel (mirai)...")
       }
