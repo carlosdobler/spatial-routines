@@ -44,8 +44,12 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
     #
   } else {
     # identify the parallel engine to use
-    if (parallel & mirai::daemons()$connections > 0) {
-      parallel_ <- "m"
+    if("mirai" %in% installed.packages()){
+      if (parallel & mirai::daemons()$connections > 0) {
+        parallel_ <- "m"
+      } else {
+        next
+      }
     } else if (parallel & !is(future::plan(), "sequential")) {
       parallel_ <- "f"
     } else {
