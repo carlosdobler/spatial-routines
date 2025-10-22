@@ -44,22 +44,22 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
     #
   } else {
     # identify the parallel engine to use
-    if ("mirai" %in% installed.packages()) {
-      if (parallel & mirai::daemons()$connections > 0) {
+    parallel_ <- "none"
+    if (parallel) {
+      if (
+        requireNamespace("mirai", quietly = TRUE) &&
+          mirai::status()$connections > 0
+      ) {
         parallel_ <- "m"
+      } else if (
+        requireNamespace("furrr", quietly = TRUE) &&
+          !is(future::plan(), "sequential")
+      ) {
+        parallel_ <- "f"
       } else {
-        if (parallel & !is(future::plan(), "sequential")) {
-          parallel_ <- "f"
-        } else {
-          parallel_ <- "none"
-        }
+        parallel_ <- "none"
       }
-    } else if (parallel & !is(future::plan(), "sequential")) {
-      parallel_ <- "f"
-    } else {
-      parallel_ <- "none"
     }
-
     # check whether gcloud or gsutil utility will be used
     if (gsutil) {
       cmd <- "gsutil"
@@ -132,7 +132,13 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
 #' @param gatt_val global attribute value (or text)
 #'
 #' @export
-rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt_val = NA) {
+rt_write_nc <- function(
+  stars_obj,
+  filename,
+  calendar = NA,
+  gatt_name = NA,
+  gatt_val = NA
+) {
   dims <- vector("list", length(dim(stars_obj)))
   names(dims) <- names(dim(stars_obj))
 
@@ -236,7 +242,11 @@ rt_write_nc <- function(stars_obj, filename, calendar = NA, gatt_name = NA, gatt
     })
 
   varis <-
-    purrr::map2(var_names, var_units, ~ ncdf4::ncvar_def(name = .x, units = .y, dim = dims))
+    purrr::map2(
+      var_names,
+      var_units,
+      ~ ncdf4::ncvar_def(name = .x, units = .y, dim = dims)
+    )
 
   ncnew <-
     ncdf4::nc_create(filename = filename, vars = varis, force_v4 = TRUE)
@@ -283,13 +293,17 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
       list(x = coords$x, y = coords$y)
   } else {
     coords <-
-      purrr::map2(list(c(xmin, xmax), c(ymin, ymax)), c(1, 2), \(coords, dim_id) {
-        s <-
-          stars_obj |>
-          stars::st_get_dimension_values(dim_id)
+      purrr::map2(
+        list(c(xmin, xmax), c(ymin, ymax)),
+        c(1, 2),
+        \(coords, dim_id) {
+          s <-
+            stars_obj |>
+            stars::st_get_dimension_values(dim_id)
 
-        purrr::map(coords, \(x) which.min(abs(s - x)))
-      }) |>
+          purrr::map(coords, \(x) which.min(abs(s - x)))
+        }
+      ) |>
       unlist(recursive = F) |>
       purrr::set_names(c("xmin", "xmax", "ymin", "ymax"))
 
