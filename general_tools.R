@@ -278,56 +278,69 @@ rt_write_nc <- function(
 #'
 #' @export
 rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
+  #
   if (is.na(xmax) & is.na(ymax)) {
+    #
     coords <-
       purrr::map2(c(xmin, ymin), c(1, 2), \(coord, dim_id) {
+        #
         s <-
           stars_obj |>
           stars::st_get_dimension_values(dim_id)
 
-        which.min(abs(s - coord))
+        if (dim_id == 1 & max(s) > 180 & coord < 0) {
+          which.min(abs(s - (360 - coord)))
+        } else {
+          which.min(abs(s - coord))
+        }
+
+        #
       }) |>
       purrr::set_names(c("x", "y"))
 
     r <-
       list(x = coords$x, y = coords$y)
+    #
   } else {
+    #
     coords <-
       purrr::map2(
         list(c(xmin, xmax), c(ymin, ymax)),
         c(1, 2),
         \(coords, dim_id) {
+          #
           s <-
             stars_obj |>
             stars::st_get_dimension_values(dim_id)
 
-          purrr::map(coords, \(x) which.min(abs(s - x)))
+          if (dim_id == 1 & max(s) > 180 & coord < 0) {
+            purrr::map(coords, \(x) which.min(abs(s - (360 - x))))
+          } else {
+            purrr::map(coords, \(x) which.min(abs(s - x)))
+          }
+          #
         }
       ) |>
       unlist(recursive = F) |>
       purrr::set_names(c("xmin", "xmax", "ymin", "ymax"))
 
     if (coords$ymax > coords$ymin) {
-      r <-
-        list(
-          x_start = coords$xmin,
-          y_start = coords$ymin,
-          x_end = coords$xmax,
-          y_end = coords$ymax,
-          x_count = coords$xmax - coords$xmin + 1,
-          y_count = coords$ymax - coords$ymin + 1
-        )
+      y_start = coords$ymin
+      y_end = coords$ymax
     } else {
-      r <-
-        list(
-          x_start = coords$xmin,
-          y_start = coords$ymax,
-          x_end = coords$xmax,
-          y_end = coords$ymin,
-          x_count = coords$xmax - coords$xmin + 1,
-          y_count = coords$ymin - coords$ymax + 1
-        )
+      y_start = coords$ymax
+      y_end = coords$ymin
     }
+
+    r <-
+      list(
+        x_start = coords$xmin,
+        y_start = y_start,
+        x_end = coords$xmax,
+        y_end = y_end,
+        x_count = coords$xmax - coords$xmin + 1,
+        y_count = coords$ymax - coords$ymin + 1
+      )
   }
 
   return(r)
