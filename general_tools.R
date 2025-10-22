@@ -8,7 +8,10 @@
 #'
 #' @export
 rt_gs_list_files <- function(dir) {
+  # build command
+
   stringr::str_glue("gcloud storage ls {dir}") |>
+    # run command
     system(intern = T)
 }
 
@@ -33,17 +36,19 @@ rt_gs_list_files <- function(dir) {
 #'
 #' @export
 rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
-  # create directory "dest" if inexistent
+  # create destination directory if it does not exist
   if (!fs::dir_exists(dest)) {
     fs::dir_create(dest)
   }
 
+  # check whether the path is a google cloud one
   if (any(stringr::str_sub(f, end = 2) != "gs")) {
-    # if path is wrong (not in google cloud)
+    # if path is wrong (not in google cloud), print error message
     print(stringr::str_glue("ERROR: not a google cloud directory"))
     #
   } else {
-    # identify the parallel engine to use
+    # if path is correct, proceed
+    # identify the parallel engine to use ("m" for mirai, "f" for future)
     parallel_ <- "none"
     if (parallel) {
       if (
@@ -67,8 +72,9 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
       cmd <- "gcloud storage"
     }
 
-    # download
+    # download files
     if (parallel_ == "none") {
+      # sequential download
       if (!quiet) {
         message("   downloading sequentially...")
       }
@@ -80,6 +86,7 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
         })
       #
     } else if (parallel_ == "m") {
+      # parallel download with mirai
       if (!quiet) {
         message("   downloading in parallel (mirai)...")
       }
@@ -96,6 +103,7 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
           )
         )
     } else if (parallel_ == "f") {
+      # parallel download with future
       if (!quiet) {
         message("   downloading in parallel (future)...")
       }
@@ -107,7 +115,7 @@ rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
         })
     }
 
-    # update names
+    # update file names to reflect their new local path
     updated <-
       stringr::str_glue("{dest}/{fs::path_file(f)}")
 
@@ -139,9 +147,11 @@ rt_write_nc <- function(
   gatt_name = NA,
   gatt_val = NA
 ) {
+  # create a list to store dimensions
   dims <- vector("list", length(dim(stars_obj)))
   names(dims) <- names(dim(stars_obj))
 
+  # define lon dimension
   dims[[1]] <-
     ncdf4::ncdim_def(
       name = names(dims)[1],
@@ -149,6 +159,7 @@ rt_write_nc <- function(
       vals = stars_obj |> stars::st_get_dimension_values(1)
     )
 
+  # define lat dimension
   dims[[2]] <-
     ncdf4::ncdim_def(
       name = names(dims)[2],
@@ -156,11 +167,13 @@ rt_write_nc <- function(
       vals = stars_obj |> stars::st_get_dimension_values(2)
     )
 
+  # define other dimensions
   for (dim_i in seq_along(dims) |> utils::tail(-2)) {
     dim_vals <-
       stars_obj |>
       stars::st_get_dimension_values(dim_i)
 
+    # if dimension is time, handle calendars
     if (
       methods::is(dim_vals, "Date") |
         methods::is(dim_vals, "POSIXct") |
@@ -172,9 +185,12 @@ rt_write_nc <- function(
         stringr::str_sub(end = 10)
 
       if (all(diff(dim_vals) == 1)) {
+        # if the time difference is 1 day, then the calendar
+        # can be guessed if not provided
         if (!is.na(calendar)) {
           cal_spec <- calendar
         } else {
+          # get february days to guess calendar
           feb <-
             time_vector_str[stringr::str_sub(time_vector_str, 6, 7) == "02"]
 
@@ -196,13 +212,16 @@ rt_write_nc <- function(
           }
         }
 
+        # create PCICt vector
         time_vector <-
           PCICt::as.PCICt(time_vector_str, cal = cal_spec)
       } else {
+        # if time difference is not 1 day, assume gregorian
         time_vector <-
           PCICt::as.PCICt(time_vector_str, cal = "gregorian")
       }
 
+      # get calendar name from PCICt object
       cal <-
         dplyr::case_when(
           attributes(time_vector)$cal == "360" ~ "360_day",
@@ -210,6 +229,7 @@ rt_write_nc <- function(
           attributes(time_vector)$cal == "proleptic_gregorian" ~ "gregorian"
         )
 
+      # define time dimension
       dims[[dim_i]] <-
         ncdf4::ncdim_def(
           name = names(dims)[dim_i],
@@ -218,13 +238,16 @@ rt_write_nc <- function(
           calendar = cal
         )
     } else {
+      # if dimension is not time, create a simple dimension
       dims[[dim_i]] <-
         ncdf4::ncdim_def(name = names(dims)[dim_i], units = "", vals = dim_vals)
     }
   }
 
+  # get variable names
   var_names <- names(stars_obj)
 
+  # get variable units
   var_units <-
     purrr::map_chr(seq_along(var_names), \(x) {
       un <- try(
@@ -241,6 +264,7 @@ rt_write_nc <- function(
       return(un)
     })
 
+  # define variables for the NetCDF
   varis <-
     purrr::map2(
       var_names,
@@ -248,13 +272,16 @@ rt_write_nc <- function(
       ~ ncdf4::ncvar_def(name = .x, units = .y, dim = dims)
     )
 
+  # create NetCDF file
   ncnew <-
     ncdf4::nc_create(filename = filename, vars = varis, force_v4 = TRUE)
 
+  # add global attributes, if any
   if (!is.na(gatt_name)) {
     ncdf4::ncatt_put(ncnew, varid = 0, attname = gatt_name, attval = gatt_val)
   }
 
+  # write data to the NetCDF file
   purrr::walk(
     seq_along(var_names),
     ~ ncdf4::ncvar_put(
@@ -264,6 +291,7 @@ rt_write_nc <- function(
     )
   )
 
+  # close the NetCDF file
   ncdf4::nc_close(ncnew)
 }
 
@@ -278,16 +306,17 @@ rt_write_nc <- function(
 #'
 #' @export
 rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
-  #
+  # check if a single point or a bounding box is provided
   if (is.na(xmax) & is.na(ymax)) {
-    #
+    # if a single point, get the closest cell indices
     coords <-
       purrr::map2(c(xmin, ymin), c(1, 2), \(coord, dim_id) {
-        #
+        # get dimension values
         s <-
           stars_obj |>
           stars::st_get_dimension_values(dim_id)
 
+        # handle longitude conversion if necessary
         if (dim_id == 1 & max(s) > 180 & coord < 0) {
           which.min(abs(s - (360 + coord)))
         } else {
@@ -298,21 +327,23 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
       }) |>
       purrr::set_names(c("x", "y"))
 
+    # prepare the output list
     r <-
       list(x = coords$x, y = coords$y)
     #
   } else {
-    #
+    # if a bounding box, get start and end indices
     coords <-
       purrr::map2(
         list(c(xmin, xmax), c(ymin, ymax)),
         c(1, 2),
         \(coords, dim_id) {
-          #
+          # get dimension values
           s <-
             stars_obj |>
             stars::st_get_dimension_values(dim_id)
 
+          # handle longitude conversion if necessary
           if (dim_id == 1 & max(s) > 180 & any(coords < 0)) {
             purrr::map(coords, \(x) which.min(abs(s - (360 + x))))
           } else {
@@ -324,6 +355,7 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
       unlist(recursive = F) |>
       purrr::set_names(c("xmin", "xmax", "ymin", "ymax"))
 
+    # ensure y_start is smaller than y_end
     if (coords$ymax > coords$ymin) {
       y_start = coords$ymin
       y_end = coords$ymax
@@ -332,6 +364,7 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
       y_end = coords$ymin
     }
 
+    # prepare the output list with start, end, and count for each dimension
     r <-
       list(
         x_start = coords$xmin,
