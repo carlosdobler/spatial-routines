@@ -289,7 +289,7 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
           stars::st_get_dimension_values(dim_id)
 
         if (dim_id == 1 & max(s) > 180 & coord < 0) {
-          which.min(abs(s - (360 - coord)))
+          which.min(abs(s - (360 + coord)))
         } else {
           which.min(abs(s - coord))
         }
@@ -314,7 +314,7 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
             stars::st_get_dimension_values(dim_id)
 
           if (dim_id == 1 & max(s) > 180 & any(coords < 0)) {
-            purrr::map(coords, \(x) which.min(abs(s - (360 - x))))
+            purrr::map(coords, \(x) which.min(abs(s - (360 + x))))
           } else {
             purrr::map(coords, \(x) which.min(abs(s - x)))
           }
