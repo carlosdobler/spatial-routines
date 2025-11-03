@@ -35,92 +35,102 @@ rt_gs_list_files <- function(dir) {
 #' @param gsutil (boolean) if FALSE (default), downloads with "gcloud storage" instead of "gsutil"
 #'
 #' @export
-rt_gs_download_files <- function(f, dest, quiet = F, parallel = T, gsutil = F) {
-  # create destination directory if it does not exist
-  if (!fs::dir_exists(dest)) {
-    fs::dir_create(dest)
-  }
-
-  # check whether the path is a google cloud one
-  if (any(stringr::str_sub(f, end = 2) != "gs")) {
-    # if path is wrong (not in google cloud), print error message
-    print(stringr::str_glue("ERROR: not a google cloud directory"))
-    #
-  } else {
-    # if path is correct, proceed
-    # identify the parallel engine to use ("m" for mirai, "f" for future)
-    parallel_ <- "none"
-    if (parallel) {
-      if (
-        requireNamespace("mirai", quietly = TRUE) &&
-          mirai::status()$connections > 0
-      ) {
-        parallel_ <- "m"
-      } else if (
-        requireNamespace("furrr", quietly = TRUE) &&
-          !is(future::plan(), "sequential")
-      ) {
-        parallel_ <- "f"
-      } else {
-        parallel_ <- "none"
-      }
-    }
-    # check whether gcloud or gsutil utility will be used
-    if (gsutil) {
-      cmd <- "gsutil"
-    } else {
-      cmd <- "gcloud storage"
+rt_gs_download_files <- function(
+  f,
+  dest,
+  quiet = F,
+  parallel = T,
+  gsutil = F,
+  update_only = F
+) {
+  #
+  if (!update_only) {
+    # create destination directory if it does not exist
+    if (!fs::dir_exists(dest)) {
+      fs::dir_create(dest)
     }
 
-    # download files
-    if (parallel_ == "none") {
-      # sequential download
-      if (!quiet) {
-        message("   downloading sequentially...")
-      }
-
-      f |>
-        purrr::walk(\(f_) {
-          stringr::str_glue("{cmd} cp {f_} {dest}") |>
-            system(ignore.stdout = T, ignore.stderr = T)
-        })
+    # check whether the path is a google cloud one
+    if (any(stringr::str_sub(f, end = 2) != "gs")) {
+      # if path is wrong (not in google cloud), print error message
+      print(stringr::str_glue("ERROR: not a google cloud directory"))
       #
-    } else if (parallel_ == "m") {
-      # parallel download with mirai
-      if (!quiet) {
-        message("   downloading in parallel (mirai)...")
+    } else {
+      # if path is correct, proceed
+      # identify the parallel engine to use ("m" for mirai, "f" for future)
+      parallel_ <- "none"
+      if (parallel) {
+        if (
+          requireNamespace("mirai", quietly = TRUE) &&
+            mirai::status()$connections > 0
+        ) {
+          parallel_ <- "m"
+        } else if (
+          requireNamespace("furrr", quietly = TRUE) &&
+            !is(future::plan(), "sequential")
+        ) {
+          parallel_ <- "f"
+        } else {
+          parallel_ <- "none"
+        }
+      }
+      # check whether gcloud or gsutil utility will be used
+      if (gsutil) {
+        cmd <- "gsutil"
+      } else {
+        cmd <- "gcloud storage"
       }
 
-      f |>
-        purrr::walk(
-          purrr::in_parallel(
-            \(f_) {
-              stringr::str_glue("{cmd} cp {f_} {dest}") |>
-                system(ignore.stdout = T, ignore.stderr = T)
-            },
-            cmd = cmd,
-            dest = dest
+      # download files
+      if (parallel_ == "none") {
+        # sequential download
+        if (!quiet) {
+          message("   downloading sequentially...")
+        }
+
+        f |>
+          purrr::walk(\(f_) {
+            stringr::str_glue("{cmd} cp {f_} {dest}") |>
+              system(ignore.stdout = T, ignore.stderr = T)
+          })
+        #
+      } else if (parallel_ == "m") {
+        # parallel download with mirai
+        if (!quiet) {
+          message("   downloading in parallel (mirai)...")
+        }
+
+        f |>
+          purrr::walk(
+            purrr::in_parallel(
+              \(f_) {
+                stringr::str_glue("{cmd} cp {f_} {dest}") |>
+                  system(ignore.stdout = T, ignore.stderr = T)
+              },
+              cmd = cmd,
+              dest = dest
+            )
           )
-        )
-    } else if (parallel_ == "f") {
-      # parallel download with future
-      if (!quiet) {
-        message("   downloading in parallel (future)...")
+      } else if (parallel_ == "f") {
+        # parallel download with future
+        if (!quiet) {
+          message("   downloading in parallel (future)...")
+        }
+
+        f |>
+          furrr::future_walk(\(f_) {
+            stringr::str_glue("{cmd} cp {f_} {dest}", cmd = cmd, dest = dest) |>
+              system(ignore.stdout = T, ignore.stderr = T)
+          })
       }
-
-      f |>
-        furrr::future_walk(\(f_) {
-          stringr::str_glue("{cmd} cp {f_} {dest}", cmd = cmd, dest = dest) |>
-            system(ignore.stdout = T, ignore.stderr = T)
-        })
     }
-
-    # update file names to reflect their new local path
-    updated <-
-      stringr::str_glue("{dest}/{fs::path_file(f)}")
-
-    return(updated)
   }
+
+  # update file names to reflect their new local path
+  updated <-
+    stringr::str_glue("{dest}/{fs::path_file(f)}")
+
+  return(updated)
 }
 
 
