@@ -8,10 +8,7 @@
 #'
 #' @export
 rt_gs_list_files <- function(dir) {
-  # build command
-
-  stringr::str_glue("gcloud storage ls {dir}") |>
-    # run command
+  paste0("gcloud storage ls ", dir) |>
     system(intern = T)
 }
 
@@ -30,30 +27,31 @@ rt_gs_list_files <- function(dir) {
 #' @param f file(s) in the bucket to download (with full path; e.g. gs://...)
 #' @param dest local destination directory
 #' @param quiet (boolean) if FALSE (default), omits printing whether files are being downloaded in parallel
-#' @param parallel (boolean) TRUE downloads in parallel with mirai (if dameons have already been called) or
+#' @param parallel (boolean) TRUE downloads in parallel with mirai (if daemons have already been called) or
 #' with future (if a plan has been specified). FALSE forces sequential downloads.
 #' @param gsutil (boolean) if FALSE (default), downloads with "gcloud storage" instead of "gsutil"
 #'
 #' @export
+
 rt_gs_download_files <- function(
   f,
   dest,
-  quiet = F,
-  parallel = T,
-  gsutil = F,
-  update_only = F
+  quiet = FALSE,
+  parallel = TRUE,
+  gsutil = FALSE,
+  update_only = FALSE
 ) {
   #
   if (!update_only) {
     # create destination directory if it does not exist
-    if (!fs::dir_exists(dest)) {
-      fs::dir_create(dest)
+    if (!dir.exists(dest)) {
+      dir.create(dest, recursive = TRUE)
     }
 
     # check whether the path is a google cloud one
-    if (any(stringr::str_sub(f, end = 2) != "gs")) {
+    if (any(substr(f, 1, 2) != "gs")) {
       # if path is wrong (not in google cloud), print error message
-      print(stringr::str_glue("ERROR: not a google cloud directory"))
+      print(paste0("ERROR: not a google cloud directory"))
       #
     } else {
       # if path is correct, proceed
@@ -81,6 +79,11 @@ rt_gs_download_files <- function(
         cmd <- "gcloud storage"
       }
 
+      f_down <- function(f_) {
+        paste0(cmd, " cp ", f_, " ", dest) |>
+          system(ignore.stdout = TRUE, ignore.stderr = TRUE)
+      }
+
       # download files
       if (parallel_ == "none") {
         # sequential download
@@ -88,11 +91,9 @@ rt_gs_download_files <- function(
           message("   downloading sequentially...")
         }
 
-        f |>
-          purrr::walk(\(f_) {
-            stringr::str_glue("{cmd} cp {f_} {dest}") |>
-              system(ignore.stdout = T, ignore.stderr = T)
-          })
+        for (f_ in f) {
+          f_down(f_)
+        }
         #
       } else if (parallel_ == "m") {
         # parallel download with mirai
@@ -103,10 +104,8 @@ rt_gs_download_files <- function(
         f |>
           purrr::walk(
             purrr::in_parallel(
-              \(f_) {
-                stringr::str_glue("{cmd} cp {f_} {dest}") |>
-                  system(ignore.stdout = T, ignore.stderr = T)
-              },
+              \(fi) f_down(fi),
+              f_down = f_down,
               cmd = cmd,
               dest = dest
             )
@@ -118,17 +117,14 @@ rt_gs_download_files <- function(
         }
 
         f |>
-          furrr::future_walk(\(f_) {
-            stringr::str_glue("{cmd} cp {f_} {dest}", cmd = cmd, dest = dest) |>
-              system(ignore.stdout = T, ignore.stderr = T)
-          })
+          furrr::future_walk(f_down)
       }
     }
   }
 
   # update file names to reflect their new local path
   updated <-
-    stringr::str_glue("{dest}/{fs::path_file(f)}")
+    paste0(dest, "/", basename(f))
 
   return(updated)
 }
@@ -138,11 +134,10 @@ rt_gs_download_files <- function(
 #'
 #' @description
 #' Function to write stars objects as NetCDFs. It can save
-#' objects with multiple variables. If variables have units,
-#' they will be saved.
+#' objects with multiple variables, preserving their units.
 #'
 #' @param stars_obj a stars object with either two or more
-#' dimensions; lon (x) and lat (y) should be the first two, in that order.
+#' dimensions; lon (x) and lat (y) must be the first two, in that order.
 #' @param filename where should the file be saved?
 #' @param calendar one of "360_day", "gregorian", or "noleap". If not
 #' provided, it will guess from the stars obj (needs February months to work)
@@ -168,7 +163,7 @@ rt_write_nc <- function(
     ncdf4::ncdim_def(
       name = names(dims)[1],
       units = "degrees_east",
-      vals = stars_obj |> stars::st_get_dimension_values(1)
+      vals = stars::st_get_dimension_values(stars_obj, 1)
     )
 
   # define lat dimension
@@ -176,83 +171,88 @@ rt_write_nc <- function(
     ncdf4::ncdim_def(
       name = names(dims)[2],
       units = "degrees_north",
-      vals = stars_obj |> stars::st_get_dimension_values(2)
+      vals = stars::st_get_dimension_values(stars_obj, 2)
     )
 
   # define other dimensions
-  for (dim_i in seq_along(dims) |> utils::tail(-2)) {
-    dim_vals <-
-      stars_obj |>
-      stars::st_get_dimension_values(dim_i)
+  if (length(dims) > 2) {
+    for (dim_i in seq_along(dims) |> tail(-2)) {
+      dim_vals <-
+        stars::st_get_dimension_values(stars_obj, dim_i)
 
-    # if dimension is time, handle calendars
-    if (
-      methods::is(dim_vals, "Date") |
-        methods::is(dim_vals, "POSIXct") |
-        methods::is(dim_vals, "PCICt")
-    ) {
-      time_vector_str <-
-        dim_vals |>
-        as.character() |>
-        stringr::str_sub(end = 10)
+      # if dimension is time, handle calendars
+      if (
+        inherits(dim_vals, "Date") |
+          inherits(dim_vals, "POSIXct") |
+          inherits(dim_vals, "PCICt")
+      ) {
+        time_vector_str <-
+          substr(as.character(dim_vals), 1, 10)
 
-      if (all(diff(dim_vals) == 1)) {
-        # if the time difference is 1 day, then the calendar
-        # can be guessed if not provided
-        if (!is.na(calendar)) {
-          cal_spec <- calendar
-        } else {
-          # get february days to guess calendar
-          feb <-
-            time_vector_str[stringr::str_sub(time_vector_str, 6, 7) == "02"]
-
-          if (length(feb) > 1) {
-            max_feb <-
-              feb |>
-              stringr::str_sub(9, 10) |>
-              as.numeric() |>
-              max()
-
-            cal_spec <-
-              dplyr::case_when(
-                max_feb == 30 ~ "360_day",
-                max_feb == 29 ~ "gregorian",
-                max_feb == 28 ~ "noleap"
-              )
+        if (all(diff(dim_vals) == 1)) {
+          # if the time difference is 1 day, then the calendar
+          # can be guessed if not provided
+          if (!is.na(calendar)) {
+            cal_spec <- calendar
           } else {
-            message("ERROR: no multiple Februaries: cannot guess calendar")
+            # get february days to guess calendar
+            feb <-
+              time_vector_str[substr(time_vector_str, 6, 7) == "02"]
+
+            if (length(feb) > 1) {
+              max_feb <-
+                max(as.numeric(substr(feb, 9, 10)))
+
+              cal_spec <-
+                if (max_feb == 30) {
+                  "360_day"
+                } else if (max_feb == 29) {
+                  "gregorian"
+                } else if (max_feb == 28) {
+                  "noleap"
+                }
+            } else {
+              message("ERROR: no multiple Februaries: cannot guess calendar")
+            }
           }
+
+          # create PCICt vector
+          time_vector <-
+            PCICt::as.PCICt(time_vector_str, cal = cal_spec)
+        } else {
+          # if time difference is not 1 day, assume gregorian
+          time_vector <-
+            PCICt::as.PCICt(time_vector_str, cal = "gregorian")
         }
 
-        # create PCICt vector
-        time_vector <-
-          PCICt::as.PCICt(time_vector_str, cal = cal_spec)
+        # get calendar name from PCICt object
+        cal_attr <- attributes(time_vector)$cal
+        cal <-
+          if (cal_attr == "360") {
+            "360_day"
+          } else if (cal_attr == "365") {
+            "365_day"
+          } else if (cal_attr == "proleptic_gregorian") {
+            "gregorian"
+          }
+
+        # define time dimension
+        dims[[dim_i]] <-
+          ncdf4::ncdim_def(
+            name = names(dims)[dim_i],
+            units = "days since 1970-01-01",
+            vals = as.numeric(time_vector) / 86400,
+            calendar = cal
+          )
       } else {
-        # if time difference is not 1 day, assume gregorian
-        time_vector <-
-          PCICt::as.PCICt(time_vector_str, cal = "gregorian")
+        # if dimension is not time, create a simple dimension
+        dims[[dim_i]] <-
+          ncdf4::ncdim_def(
+            name = names(dims)[dim_i],
+            units = "",
+            vals = dim_vals
+          )
       }
-
-      # get calendar name from PCICt object
-      cal <-
-        dplyr::case_when(
-          attributes(time_vector)$cal == "360" ~ "360_day",
-          attributes(time_vector)$cal == "365" ~ "365_day",
-          attributes(time_vector)$cal == "proleptic_gregorian" ~ "gregorian"
-        )
-
-      # define time dimension
-      dims[[dim_i]] <-
-        ncdf4::ncdim_def(
-          name = names(dims)[dim_i],
-          units = "days since 1970-01-01",
-          vals = as.numeric(time_vector) / 86400,
-          calendar = cal
-        )
-    } else {
-      # if dimension is not time, create a simple dimension
-      dims[[dim_i]] <-
-        ncdf4::ncdim_def(name = names(dims)[dim_i], units = "", vals = dim_vals)
     }
   }
 
@@ -261,16 +261,10 @@ rt_write_nc <- function(
 
   # get variable units
   var_units <-
-    purrr::map_chr(seq_along(var_names), \(x) {
-      un <- try(
-        stars_obj |>
-          dplyr::select(dplyr::all_of(x)) |>
-          dplyr::pull() |>
-          units::deparse_unit(),
-        silent = T
-      )
-
-      if (class(un) == "try-error") {
+    sapply(seq_along(var_names), function(x) {
+      if (inherits(stars_obj[[x]], "units")) {
+        un <- units::deparse_unit(stars_obj[[x]])
+      } else {
         un <- ""
       }
       return(un)
@@ -278,10 +272,11 @@ rt_write_nc <- function(
 
   # define variables for the NetCDF
   varis <-
-    purrr::map2(
+    mapply(
+      function(vn, vu) ncdf4::ncvar_def(name = vn, units = vu, dim = dims, ...),
       var_names,
       var_units,
-      \(vn, vu) ncdf4::ncvar_def(name = vn, units = vu, dim = dims, ...)
+      SIMPLIFY = FALSE
     )
 
   # create NetCDF file
@@ -294,15 +289,17 @@ rt_write_nc <- function(
   }
 
   # write data to the NetCDF file
-  purrr::walk(
-    seq_along(var_names),
-    \(vn) {
-      ncdf4::ncvar_put(
-        nc = ncnew,
-        varid = varis[[vn]],
-        vals = stars_obj |> dplyr::select(dplyr::all_of(vn)) |> dplyr::pull()
-      )
-    }
+  invisible(
+    sapply(
+      seq_along(var_names),
+      function(vn) {
+        ncdf4::ncvar_put(
+          nc = ncnew,
+          varid = varis[[vn]],
+          vals = stars_obj[[vn]]
+        )
+      }
+    )
   )
 
   # close the NetCDF file
@@ -319,27 +316,32 @@ rt_write_nc <- function(
 #'  end positions, and counts.
 #'
 #' @export
+
 rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
   # check if a single point or a bounding box is provided
   if (is.na(xmax) & is.na(ymax)) {
     # if a single point, get the closest cell indices
     coords <-
-      purrr::map2(c(xmin, ymin), c(1, 2), \(coord, dim_id) {
-        # get dimension values
-        s <-
-          stars_obj |>
-          stars::st_get_dimension_values(dim_id)
+      mapply(
+        function(coord, dim_id) {
+          # get dimension values
+          s <-
+            stars_obj |>
+            stars::st_get_dimension_values(dim_id)
 
-        # handle longitude conversion if necessary
-        if (dim_id == 1 & max(s) > 180 & coord < 0) {
-          which.min(abs(s - (360 + coord)))
-        } else {
-          which.min(abs(s - coord))
-        }
+          # handle longitude conversion if necessary
+          if (dim_id == 1 & max(s) > 180 & coord < 0) {
+            which.min(abs(s - (360 + coord)))
+          } else {
+            which.min(abs(s - coord))
+          }
+        },
+        c(xmin, ymin),
+        c(1, 2),
+        SIMPLIFY = FALSE
+      )
 
-        #
-      }) |>
-      purrr::set_names(c("x", "y"))
+    names(coords) <- c("x", "y")
 
     # prepare the output list
     r <-
@@ -348,10 +350,8 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
   } else {
     # if a bounding box, get start and end indices
     coords <-
-      purrr::map2(
-        list(c(xmin, xmax), c(ymin, ymax)),
-        c(1, 2),
-        \(coords, dim_id) {
+      mapply(
+        function(coords, dim_id) {
           # get dimension values
           s <-
             stars_obj |>
@@ -359,23 +359,28 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
 
           # handle longitude conversion if necessary
           if (dim_id == 1 & max(s) > 180 & any(coords < 0)) {
-            purrr::map(coords, \(x) which.min(abs(s - (360 + x))))
+            lapply(coords, function(x) which.min(abs(s - (360 + x))))
           } else {
-            purrr::map(coords, \(x) which.min(abs(s - x)))
+            lapply(coords, function(x) which.min(abs(s - x)))
           }
-          #
-        }
+        },
+        list(c(xmin, xmax), c(ymin, ymax)),
+        c(1, 2),
+        SIMPLIFY = FALSE
       ) |>
-      unlist(recursive = F) |>
-      purrr::set_names(c("xmin", "xmax", "ymin", "ymax"))
+      unlist(recursive = FALSE)
+
+    names(coords) <- c("xmin", "xmax", "ymin", "ymax")
 
     # ensure y_start is smaller than y_end
     if (coords$ymax > coords$ymin) {
-      y_start = coords$ymin
-      y_end = coords$ymax
+      y_start <- coords$ymin
+      y_end <- coords$ymax
+      y_count <- coords$ymax - coords$ymin + 1
     } else {
-      y_start = coords$ymax
-      y_end = coords$ymin
+      y_start <- coords$ymax
+      y_end <- coords$ymin
+      y_count <- coords$ymin - coords$ymax + 1
     }
 
     # prepare the output list with start, end, and count for each dimension
@@ -386,7 +391,7 @@ rt_from_coord_to_ind <- function(stars_obj, xmin, ymin, xmax = NA, ymax = NA) {
         x_end = coords$xmax,
         y_end = y_end,
         x_count = coords$xmax - coords$xmin + 1,
-        y_count = coords$ymax - coords$ymin + 1
+        y_count = y_count
       )
   }
 

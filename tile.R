@@ -2,25 +2,27 @@
 #'
 #' Function to split a stars object (can be a proxy) into tiles of a given size.
 #' Output is a table specifying where each tile starts and ends in terms of cell positions.
-#' If "land" is provided, an additional column is added indicating whether a tile covers
-#' a portion of land. In this case, the output is an sf object (tiles as polygons) with
-#' an associated table.
+#' If a mask is provided, an additional column is added indicating whether a tile overlaps
+#' with cells with values from that mask. In this case, the output is an sf object (tiles
+#' as polygons) with an associated table.
 #'
 #' @param s stars object or proxy
 #' @param tile_size number of cells per side of tile
-#' @param land stars object in which land is represented with any value and oceans as NA.
-#'   This object * must * have the exact same spatial dimensions as s.
+#' @param mask stars object in which areas of interest are represented with any value and
+#' areas of no interest as NA. This object must have the exact same spatial dimensions as s.
 #'
 #' @export
-rt_tile_table <- function(s, tile_size, land = NULL) {
+rt_tile_table <- function(s, tile_size, mask = NULL) {
   # dimensions' indices
   dims <-
     c(1, 2) |>
-    purrr::set_names(c("x", "y"))
+    setNames(c("x", "y"))
 
   # create table of positions, one for each dimension
   df <-
-    purrr::imap(dims, function(dim_id, dim_name) {
+    lapply(names(dims), function(dim_name) {
+      dim_id <- dims[[dim_name]]
+
       d <-
         dim(s)[dim_id] |>
         seq_len()
@@ -28,64 +30,86 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
       n <-
         round(dim(s)[dim_id] / tile_size)
 
-      split(d, ceiling(d / (length(d) / n))) |>
+      tiles <- split(d, ceiling(d / (length(d) / n)))
 
-        purrr::map_dfr(
-          ~ dplyr::tibble(start = dplyr::first(.x), end = dplyr::last(.x)) |>
-            dplyr::mutate(count = end - start + 1)
-        ) |>
-
-        dplyr::rename(
-          !!stringr::str_glue("start_{dim_name}") := 1,
-          !!stringr::str_glue("end_{dim_name}") := 2,
-          !!stringr::str_glue("count_{dim_name}") := 3
-        )
-    })
+      do.call(
+        rbind,
+        lapply(tiles, function(.x) {
+          data.frame(
+            start = .x[1],
+            end = .x[length(.x)],
+            count = .x[length(.x)] - .x[1] + 1
+          )
+        })
+      ) |>
+        setNames(c(
+          paste0("start_", dim_name),
+          paste0("end_", dim_name),
+          paste0("count_", dim_name)
+        ))
+    }) |>
+    setNames(c("x", "y"))
 
   # combine both tables
   df <-
-    tidyr::expand_grid(df$x, df$y)
+    expand.grid(
+      seq_len(nrow(df$x)),
+      seq_len(nrow(df$y))
+    ) |>
+    transform(
+      start_x = df$x$start_x[Var1],
+      end_x = df$x$end_x[Var1],
+      count_x = df$x$count_x[Var1],
+      start_y = df$y$start_y[Var2],
+      end_y = df$y$end_y[Var2],
+      count_y = df$y$count_y[Var2]
+    ) |>
+    subset(select = -c(Var1, Var2))
 
   # add index column with appropriate padding
   length_id <-
     df |>
     nrow() |>
-    stringr::str_length()
+    nchar()
 
   df <-
     df |>
-    dplyr::mutate(
-      tile_id = dplyr::row_number() |> stringr::str_pad(length_id, "left", "0"),
-      .before = 1
-    )
+    transform(
+      tile_id = formatC(seq_len(nrow(df)), width = length_id, flag = "0")
+    ) |>
+    (\(x) x[c("tile_id", setdiff(names(x), "tile_id"))])()
 
-  # if land is provided:
-  if (!is.null(land)) {
+  # if mask is provided:
+  if (!is.null(mask)) {
+    mask_data <-
+      lapply(seq_len(nrow(df)), function(i) {
+        start_x <- df$start_x[i]
+        end_x <- df$end_x[i]
+        start_y <- df$start_y[i]
+        end_y <- df$end_y[i]
+
+        # crop the mask raster to the tile
+        mask_tile <-
+          mask[,
+            start_x:end_x,
+            start_y:end_y
+          ]
+
+        # turn to polygon
+        pol_tile <-
+          mask_tile |>
+          sf::st_bbox() |>
+          sf::st_as_sfc() |>
+          sf::st_sf(geom = _)
+
+        # evaluate if there are areas of interest in the cropped mask tile
+        pol_tile |>
+          transform(mask = !all(is.na(mask_tile[[1]])))
+      }) |>
+      do.call(rbind, args = _)
+
     df <-
-      # loop through tiles (rows of table)
-      dplyr::mutate(
-        df,
-        land = purrr::pmap_dfr(df, function(start_x, end_x, start_y, end_y, ...) {
-          # crop the land raster to the tile
-          land_tile <-
-            land[,
-              start_x:end_x,
-              start_y:end_y
-            ]
-
-          # turn to polygon
-          pol_tile <-
-            land_tile %>%
-            sf::st_bbox() %>%
-            sf::st_as_sfc() %>%
-            sf::st_sf()
-
-          # evaluate if there is land in the cropped land tile
-          pol_tile %>%
-            dplyr::mutate(land = dplyr::if_else(all(is.na(dplyr::pull(land_tile))), F, T))
-        })
-      ) |>
-      tidyr::unnest(cols = c(land)) |>
+      cbind(df, mask_data) |>
       sf::st_as_sf()
   }
 
@@ -95,92 +119,123 @@ rt_tile_table <- function(s, tile_size, land = NULL) {
 
 # *****
 
-#' Load a tile from a list of files
+#' Load a tile from a list of rasters
 #'
-#' Helper function to load a tile of a list of files.
+#' Loads a square area (a tile) of multiple rasters and concatenates them.
+#' Loading happens in parallel by default using either mirai or future, depending on whether
+#' daemons or a plan (e.g. multicore) have been called beforehand. If no daemons or
+#' plan has been specified, downloads will be sequential. The option to force downloads
+#' to be sequential is also available.
 #'
-#' @param start_x Starting x position
-#' @param start_y Starting y position
-#' @param count_x Number of cells in x dimension
-#' @param count_y Number of cells in y dimension
-#' @param list_files List of files to load from
-#' @param parallel Parallelization method. NULL for sequential, "mirai" or "future"
+#' @param df_matrix Matrix with one row per dimension and two columns:
+#' one for start and another for count positions
+#' @param list_files List of file paths to load
+#' @param read_method "mdim" (default) to read data using stars::read_mdim or
+#' "ncdf" to use stars::read_ncdf
+#' @param parallel (boolean) TRUE downloads in parallel with mirai (if daemons have already been called) or
+#' with future (if a plan has been specified). FALSE forces sequential downloads.
 #'
 #' @export
-rt_tile_load <- function(start_x, start_y, count_x, count_y, list_files, parallel = NULL) {
-  # NEEDS A WAY TO SPECIFY TIME STEPS TO IMPORT!
-  # OR TO ACCOUNT FOR 1 TIME STEP
+rt_tile_load <- function(
+  df_matrix,
+  list_files,
+  read_method = "mdim",
+  parallel = TRUE,
+  quiet = TRUE,
+  ...
+) {
+  # identify the parallel engine to use ("m" for mirai, "f" for future)
+  parallel_ <- "none"
+  if (parallel) {
+    if (
+      requireNamespace("mirai", quietly = TRUE) &&
+        mirai::status()$connections > 0
+    ) {
+      parallel_ <- "m"
+    } else if (
+      requireNamespace("furrr", quietly = TRUE) &&
+        !is(future::plan(), "sequential")
+    ) {
+      parallel_ <- "f"
+    } else {
+      parallel_ <- "none"
+    }
+  }
 
-  if (is.null(parallel)) {
+  # extract values from df_matrix for use in parallel workers
+  start_vals <- df_matrix[, 1] |> as.integer()
+  count_vals <- df_matrix[, 2] |> as.integer()
+
+  f_import <- function(f_, ...) {
+    if (read_method == "mdim") {
+      s <-
+        stars::read_mdim(
+          f_,
+          offset = start_vals - 1,
+          count = count_vals
+        )
+    } else if (read_method == "ncdf") {
+      s <-
+        stars::read_ncdf(
+          f_,
+          ncsub = cbind(
+            start = start_vals,
+            count = count_vals
+          )
+        ) |>
+        suppressMessages()
+    }
+    return(s)
+  }
+
+  # load files based on parallel engine
+  if (parallel_ == "none") {
+    # sequential loading
+    if (!quiet) {
+      message("   loading sequentially...")
+    }
+
     s_tile <-
       list_files |>
-      purrr::map(
-        \(f) {
-          stars::read_ncdf(
-            f,
-            ignore_bounds = T,
-            ncsub = cbind(
-              start = c(start_x, start_y, 1),
-              count = c(count_x, count_y, NA)
-            )
-          ) |>
-            suppressMessages()
-        }
+      lapply(
+        f_import,
+        read_method = read_method,
+        start_vals = start_vals,
+        count_vals = count_vals
       )
-  } else if (parallel == "mirai") {
+  } else if (parallel_ == "m") {
+    # parallel loading with mirai
+    if (!quiet) {
+      message("   loading in parallel (mirai)...")
+    }
+
     s_tile <-
       list_files |>
       purrr::map(purrr::in_parallel(
-        \(f) {
-          stars::read_ncdf(
-            f,
-            ignore_bounds = T,
-            ncsub = cbind(
-              start = c(start_x, start_y, 1),
-              count = c(count_x, count_y, NA)
-            )
-          ) |>
-            suppressMessages()
-        },
-        start_x = start_x,
-        start_y = start_y,
-        count_x = count_x,
-        count_y = count_y
+        \(f) f_import(f),
+        f_import = f_import,
+        read_method = read_method,
+        start_vals = start_vals,
+        count_vals = count_vals
       ))
-  } else if (parallel == "future") {
+  } else if (parallel_ == "f") {
+    # parallel loading with future
+    if (!quiet) {
+      message("   loading in parallel (future)...")
+    }
+
     s_tile <-
       list_files |>
       furrr::future_map(
-        \(f) {
-          stars::read_ncdf(
-            f,
-            ignore_bounds = T,
-            ncsub = cbind(
-              start = c(start_x, start_y, 1),
-              count = c(count_x, count_y, NA)
-            )
-          ) |>
-            suppressMessages()
-        }
+        f_import,
+        read_method = read_method,
+        start_vals = start_vals,
+        count_vals = count_vals
       )
   }
 
   s_tile <-
-    do.call(c, s_tile)
-
-  # if (grid_360) {
-  #
-  #   lon <- st_get_dimension_values(s_tile, 1, center = F)
-  #
-  #   if (any(lon < 0)) {
-  #
-  #     lon[lon < 0] <- lon[lon < 0] + 360
-  #     s_tile <-
-  #       s_tile |>
-  #       st_set_dimensions(1, values = lon)
-  #
-  #   }
-  # }
+    do.call(c, c(s_tile, ...))
 
   return(s_tile)
 }
@@ -188,287 +243,43 @@ rt_tile_load <- function(start_x, start_y, count_x, count_y, list_files, paralle
 
 # *****
 
-#' Loop through tiles and process them
+#' Mosaic a list of stars objects
 #'
-#' Function that first loads data from list_files, then runs a function (FUN)
-#' on each tile in df_tiles, and then saves the output (a processed tile) in dir_tiles.
+#' Combines multiple stars objects into a single mosaic, preserving units,
+#' dimension names, and dimension values from the the original objects.
 #'
-#' @param df_tiles Data frame containing tile information
-#' @param list_files List of files to load data from
-#' @param FUN Function to apply to each tile
-#' @param dir_tiles Directory to save processed tiles
+#' @param list_s List of stars objects to mosaic
+#' @param ... Additional arguments
 #'
 #' @export
-rt_tile_loop <- function(df_tiles, list_files, FUN, dir_tiles) {
-  # if dir_tiles does not exist, create it
-  if (!fs::dir_exists(dir_tiles)) {
-    fs::dir_create(dir_tiles)
-  }
-
-  # should rt_tile_h_load run in parallel?
-  # depends on current plan
-  if (is(future::plan(), "sequential")) {
-    parallel_load <- T
-  } else {
-    parallel_load <- F
-  }
-
-  # loop through tiles
-  furrr::future_pwalk(df_tiles, function(tile_id, start_x, start_y, count_x, count_y, ...) {
-    # load all data within the tile
-    s_tile <-
-      rt_tile_h_load(start_x, start_y, count_x, count_y, list_files, parallel_load)
-
-    # apply function
-    s_tile <-
-      FUN(s_tile)
-
-    # save tile
-    s_tile |>
-      readr::write_rds(stringr::str_glue("{dir_tiles}/tile_{tile_id}.rds"))
-  })
-}
-
-
-# *****
-
-#' Mosaic tiles back together
-#'
-#' @param df_tiles Data frame containing tile information
-#' @param dir_tiles Directory containing saved tiles
-#' @param spatial_dims Spatial dimensions for the output
-#' @param time_dim Time dimension subset (optional)
-#'
-#' @export
-rt_tile_mosaic <- function(df_tiles, dir_tiles, spatial_dims, time_dim = NULL) {
-  box::use(stars[...], sf[...], dplyr[...], purrr[...], future[...], furrr[...], stringr[...])
-
-  s <-
-    stars::st_as_stars(dimensions = spatial_dims)
-
-  df_tiles <-
-    df_tiles |>
-    sf::st_drop_geometry()
-
-  if (!is.null(time_dim)) {
-    time_dim_full <-
-      dir_tiles |>
-      fs::dir_ls() |>
-      dplyr::first() |>
-      stars::read_ncdf(proxy = T) |>
-      suppressMessages() |>
-      stars::st_get_dimension_values("time")
-
-    time_lims <-
-      c(
-        which(time_dim_full == dplyr::first(time_dim)),
-        which(time_dim_full == dplyr::last(time_dim))
-      )
-  }
-
-  # if tiling accounts for land coverage
-  if (df_tiles |> names() |> stringr::str_detect("land") |> any()) {
-    rows <-
-      # loop through rows
-      purrr::map(unique(df_tiles$start_y), function(row_i) {
-        one_row <-
-          df_tiles |>
-          dplyr::filter(start_y == row_i) |>
-          furrr::future_pmap(function(tile_id, start_x, end_x, start_y, end_y, land, ...) {
-            # if tile has no land
-            # create an empty stars object of the size of the tile
-            if (land == FALSE) {
-              ss <- s[, start_x:end_x, start_y:end_y]
-
-              if (is.null(time_dim)) {
-                empty_array <-
-                  array(NA, dim = c(dim(ss)[1], dim(ss)[2]))
-              } else {
-                empty_array <-
-                  array(NA, dim = c(dim(ss)[1], dim(ss)[2], time = length(time_dim)))
-              }
-
-              empty_stars <-
-                stars::st_as_stars(empty_array)
-
-              stars::st_dimensions(empty_stars)[1] <- stars::st_dimensions(ss)[1]
-              stars::st_dimensions(empty_stars)[2] <- stars::st_dimensions(ss)[2]
-
-              if (!is.null(time_dim)) {
-                empty_stars <-
-                  stars::st_set_dimensions(empty_stars, 3, values = time_dim)
-              }
-
-              return(empty_stars)
-
-              # tile has land:
-              # load from saved file
-            } else {
-              f_tile <-
-                dir_tiles |>
-                fs::dir_ls(regexp = stringr::str_glue("{tile_id}.nc"))
-
-              if (is.null(time_dim)) {
-                f_tile |>
-                  stars::read_ncdf() |>
-                  suppressMessages()
-              } else {
-                f_tile |>
-                  stars::read_ncdf(
-                    ncsub = cbind(
-                      start = c(1, 1, time_lims[1]),
-                      count = c(NA, NA, time_lims[2] - time_lims[1] + 1)
-                    )
-                  ) |>
-                  suppressMessages()
-              }
-            }
-          })
-
-        # concatenate tiles from one row
-        one_row <-
-          do.call(c, c(one_row, along = 1))
-
-        # fix dimension
-        stars::st_dimensions(one_row)[1] <- stars::st_dimensions(s)[1]
-
-        return(one_row)
-      })
-
-    # tiling does not account for land coverage:
-    # load all tiles from saved files
-  } else {
-    rows <-
-      purrr::map(unique(df_tiles$start_y), function(row_i) {
-        one_row <-
-          df_tiles |>
-          dplyr::filter(start_y == row_i) |>
-          furrr::future_pmap(function(tile_id, ...) {
-            f_tile <-
-              dir_tiles |>
-              fs::dir_ls(regexp = stringr::str_glue("{tile_id}.nc"))
-
-            if (is.null(time_dim)) {
-              f_tile |>
-                stars::read_ncdf() |>
-                suppressMessages()
-            } else {
-              f_tile |>
-                stars::read_ncdf(
-                  ncsub = cbind(
-                    start = c(1, 1, time_lims[1]),
-                    count = c(NA, NA, time_lims[2] - time_lims[1] + 1)
-                  )
-                ) |>
-                suppressMessages()
-            }
-          })
-
-        stars::st_dimensions(one_row)[1] <- stars::st_dimensions(s)[1]
-
-        return(one_row)
-      })
-  }
-
-  # concatenate all rows
+rt_mosaic <- function(list_s, ...) {
   mos <-
-    do.call(c, c(rows, along = 2))
+    do.call(stars::st_mosaic, list_s)
 
-  # fix dimension
-  stars::st_dimensions(mos)[2] <- stars::st_dimensions(s)[2]
+  if (inherits(list_s[[1]][[1]], "units")) {
+    un <- units::deparse_unit(list_s[[1]][[1]])
+    units(mos[[1]]) <- units::as_units(un)
+  }
+
+  n_dims <- length(dim(list_s[[1]]))
+
+  mos <-
+    stars::st_set_dimensions(
+      mos,
+      which = seq(n_dims),
+      names = names(stars::st_dimensions(list_s[[1]]))
+    )
+
+  if (n_dims > 2) {
+    for (n_dim in seq(n_dims) |> tail(-2)) {
+      mos <-
+        st_set_dimensions(
+          mos,
+          which = n_dim,
+          values = st_get_dimension_values(list_s[[1]], which = n_dim)
+        )
+    }
+  }
 
   return(mos)
-}
-
-
-# *****
-
-#' Mosaic tiles using GDAL utilities
-#'
-#' @param tile_files Vector of tile file paths
-#' @param dir_res Directory for results
-#' @param spatial_dims Spatial dimensions for output (optional)
-#' @param time_dim Time dimension subset (optional)
-#' @param time_full Full time vector for subsetting (optional)
-#'
-#' @export
-rt_tile_mosaic_gdal <- function(
-  tile_files,
-  dir_res,
-  spatial_dims = NULL,
-  time_dim = NULL,
-  time_full = NULL
-) {
-  if (!is.null(time_dim)) {
-    # identify positions of time range in relation to full time vector
-    time_pos <-
-      c(which(time_full == dplyr::first(time_dim)), which(time_full == dplyr::last(time_dim)))
-
-    # subset tile files
-    # update paths
-
-    dir_tiles_sub <- stringr::str_glue("{dir_res}/tiles")
-    fs::dir_create(dir_tiles_sub)
-
-    tile_files <-
-      purrr::map(
-        tile_files,
-        purrr::in_parallel(
-          \(f) {
-            new_f <-
-              stringr::str_glue(
-                "{dir_tiles_sub}/{f |> fs::path_file() |> fs::path_ext_remove()}.tif"
-              )
-
-            stars::read_ncdf(
-              f,
-              ncsub = cbind(
-                start = c(1, 1, time_pos[1]),
-                count = c(NA, NA, time_pos[2] - time_pos[1] + 1)
-              )
-            ) |>
-              suppressMessages() |>
-              stars::write_stars(new_f)
-
-            return(new_f)
-          },
-          dir_tiles_sub = dir_tiles_sub,
-          time_pos = time_pos
-        )
-      ) |>
-      unlist()
-  }
-
-  # mosaic with gdalwarp
-  dir_mos <- stringr::str_glue("{dir_res}/mos")
-  fs::dir_create(dir_mos)
-
-  f_res <-
-    stringr::str_glue("{dir_mos}/mos.tif")
-
-  sf::gdal_utils(
-    "warp",
-    source = tile_files,
-    destination = f_res,
-    options = c("-dstnodata", "-9999")
-  )
-
-  s <-
-    f_res |>
-    stars::read_stars()
-
-  if (!is.null(spatial_dims)) {
-    s_ref <-
-      stars::st_as_stars(dimensions = spatial_dims)
-
-    s <-
-      stars::st_warp(s, s_ref)
-  }
-
-  fs::dir_delete(dir_mos)
-  if (fs::dir_exists(dir_tiles_sub)) {
-    fs::dir_delete(dir_tiles_sub)
-  }
-
-  return(s)
 }
