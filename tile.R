@@ -253,33 +253,55 @@ rt_tile_load <- function(
 #'
 #' @export
 rt_mosaic <- function(list_s, ...) {
-  mos <-
-    do.call(stars::st_mosaic, list_s)
+  #
+  vars <- names(list_s[[1]])
 
-  if (inherits(list_s[[1]][[1]], "units")) {
-    un <- units::deparse_unit(list_s[[1]][[1]])
-    units(mos[[1]]) <- units::as_units(un)
-  }
+  r <-
+    vars |>
+    map(\(v) {
+      list_s_1var <-
+        list_s |>
+        map(\(s) {
+          s |>
+            select({{ v }})
+        })
 
-  n_dims <- length(dim(list_s[[1]]))
-
-  mos <-
-    stars::st_set_dimensions(
-      mos,
-      which = seq(n_dims),
-      names = names(stars::st_dimensions(list_s[[1]]))
-    )
-
-  if (n_dims > 2) {
-    for (n_dim in seq(n_dims) |> tail(-2)) {
       mos <-
-        st_set_dimensions(
+        do.call(stars::st_mosaic, list_s_1var)
+
+      if (inherits(list_s_1var[[1]][[1]], "units")) {
+        un <- units::deparse_unit(list_s_1var[[1]][[1]])
+        units(mos[[1]]) <- units::as_units(un)
+      }
+
+      n_dims <- length(dim(list_s[[1]]))
+
+      mos <-
+        stars::st_set_dimensions(
           mos,
-          which = n_dim,
-          values = st_get_dimension_values(list_s[[1]], which = n_dim)
+          which = seq(n_dims),
+          names = names(stars::st_dimensions(list_s[[1]]))
         )
-    }
+
+      if (n_dims > 2) {
+        for (n_dim in seq(n_dims) |> tail(-2)) {
+          mos <-
+            st_set_dimensions(
+              mos,
+              which = n_dim,
+              values = st_get_dimension_values(list_s[[1]], which = n_dim)
+            )
+        }
+      }
+
+      return(mos)
+    })
+
+  if (length(vars) > 1) {
+    r <- do.call(c, r)
+  } else {
+    r <- r[[1]]
   }
 
-  return(mos)
+  return(r)
 }
