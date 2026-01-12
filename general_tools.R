@@ -9,7 +9,7 @@
 #' @export
 rt_gs_list_files <- function(dir) {
   paste0("gcloud storage ls ", dir) |>
-    system(intern = T)
+    system(intern = T, ignore.stderr = T)
 }
 
 
