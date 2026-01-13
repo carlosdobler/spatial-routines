@@ -36,13 +36,14 @@ rt_gs_list_files <- function(dir) {
 rt_gs_download_files <- function(
   f,
   dest,
-  quiet = FALSE,
-  parallel = TRUE,
   gsutil = FALSE,
   update_only = FALSE
 ) {
   #
   if (!update_only) {
+    # remove trailing slash from dest if present
+    dest <- sub("/$", "", dest)
+
     # create destination directory if it does not exist
     if (!dir.exists(dest)) {
       dir.create(dest, recursive = TRUE)
@@ -55,71 +56,31 @@ rt_gs_download_files <- function(
       #
     } else {
       # if path is correct, proceed
-      # identify the parallel engine to use ("m" for mirai, "f" for future)
-      parallel_ <- "none"
-      if (parallel) {
-        if (
-          requireNamespace("mirai", quietly = TRUE) &&
-            mirai::status()$connections > 0
-        ) {
-          parallel_ <- "m"
-        } else if (
-          requireNamespace("furrr", quietly = TRUE) &&
-            !is(future::plan(), "sequential")
-        ) {
-          parallel_ <- "f"
-        } else {
-          parallel_ <- "none"
-        }
-      }
       # check whether gcloud or gsutil utility will be used
       if (gsutil) {
-        cmd <- "gsutil"
+        cmd <- "gsutil -m cp -I"
       } else {
-        cmd <- "gcloud storage"
+        cmd <- "gcloud storage cp -I"
       }
 
-      f_down <- function(f_) {
-        paste0(cmd, " cp ", f_, " ", dest) |>
-          system(ignore.stdout = TRUE, ignore.stderr = TRUE)
-      }
+      # create temporary file with list of files to download
+      temp_file <- tempfile()
+      writeLines(f, temp_file)
 
-      # download files
-      if (parallel_ == "none") {
-        # sequential download
-        if (!quiet) {
-          message("   downloading sequentially...")
-        }
+      # download files using batch mode
+      paste0(cmd, " ", dest) |>
+        system(
+          input = readLines(temp_file),
+          ignore.stdout = T,
+          ignore.stderr = T
+        )
 
-        for (f_ in f) {
-          f_down(f_)
-        }
-        #
-      } else if (parallel_ == "m") {
-        # parallel download with mirai
-        if (!quiet) {
-          message("   downloading in parallel (mirai)...")
-        }
-
-        f |>
-          purrr::walk(
-            purrr::in_parallel(
-              \(fi) f_down(fi),
-              f_down = f_down,
-              cmd = cmd,
-              dest = dest
-            )
-          )
-      } else if (parallel_ == "f") {
-        # parallel download with future
-        if (!quiet) {
-          message("   downloading in parallel (future)...")
-        }
-
-        f |>
-          furrr::future_walk(f_down)
-      }
+      # delete temporary file
+      unlink(temp_file)
     }
+  } else {
+    # remove trailing slash from dest if present (for update_only case)
+    dest <- sub("/$", "", dest)
   }
 
   # update file names to reflect their new local path
