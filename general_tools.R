@@ -180,10 +180,18 @@ rt_write_nc <- function(
           # create PCICt vector
           time_vector <-
             PCICt::as.PCICt(time_vector_str, cal = cal_spec)
+
+          # if time difference is not 1 day
         } else {
-          # if time difference is not 1 day, assume gregorian
-          time_vector <-
-            PCICt::as.PCICt(time_vector_str, cal = "gregorian")
+          # if calendar is provided
+          if (!is.na(calendar)) {
+            time_vector <-
+              PCICt::as.PCICt(time_vector_str, cal = calendar)
+            # if not provided, assume gregorian
+          } else {
+            time_vector <-
+              PCICt::as.PCICt(time_vector_str, cal = "gregorian")
+          }
         }
 
         # get calendar name from PCICt object
